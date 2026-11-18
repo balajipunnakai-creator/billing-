@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Billing</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="gl()"></script>
+<style>
+:root{--bg:#eceff2;--ink:#1c2a33;--mut:#5d6b75;--card:#fff;--ac:#f2b705;--ok:#0f766e;--bad:#b42318;--ln:#d5dbe0;color-scheme:light dark}
+@media(prefers-color-scheme:dark){:root{--bg:#12191e;--ink:#e8edf0;--mut:#94a3ad;--card:#1b252c;--ln:#2c3a43}}
+*{box-sizing:border-box}
+body{margin:0;font:500 16px 'Barlow Semi Condensed',system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:env(safe-area-inset-top) 0 80px}
+main,#lg{max-width:640px;margin:0 auto;padding:14px}
+h1,h2{margin:.2em 0 .5em;font-weight:700}
+.c{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:12px;margin:0 0 10px}
+.big{font-size:30px;font-weight:700}.m{color:var(--mut);font-size:14px}.up{color:var(--ok)}.dn{color:var(--bad)}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.r{display:flex;gap:8px;align-items:center;justify-content:space-between}
+input,textarea{width:100%;padding:10px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin:3px 0 8px}
+label{font-size:14px;color:var(--mut)}
+.b{background:var(--ac);color:#1c2a33;border:0;border-radius:8px;padding:11px 16px;font:700 16px inherit;font-family:inherit}
+.b.s{background:var(--bg);color:var(--ink);border:1px solid var(--ln)}
+.it{padding:9px 0;border-top:1px solid var(--ln)}
+#nv{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--ln);padding-bottom:env(safe-area-inset-bottom)}
+#nv button{flex:1;padding:14px 0;border:0;background:none;color:var(--mut);font:700 15px inherit;font-family:inherit}
+#nv button.on{color:var(--ink);box-shadow:inset 0 3px var(--ac)}
+dialog{width:min(92vw,520px);border:1px solid var(--ln);border-radius:12px;background:var(--card);color:var(--ink);max-height:90vh}
+img.p{max-height:50px;display:block;margin:4px 0}
+[hidden]{display:none!important}</style></head><body>
+<div id="lk" hidden style="position:fixed;inset:0;background:var(--bg);z-index:99;padding:20vh 20px 0;text-align:center"><h1>Enter PIN</h1><input id="pi" type="password" inputmode="numeric" maxlength="4" autocomplete="off" style="max-width:240px;text-align:center;font-size:28px" oninput="if(this.value.length==4)tryPin()"><div id="pe" class="dn"></div></div><div id="lg"><h1>Billing</h1><p class="m">Sign in with Google. Your data is saved in a Google Sheet in your own Drive.</p><button class="b" onclick="login()">Sign in with Google</button><p id="er" class="dn"></p></div>
+<main id="v" hidden></main>
+<nav id="nv" hidden></nav>
+<dialog id="dlg"></dialog>
+<script>
+const CID='63846305787-r7b7ppps9ok5v1fdm3su810a78rtdduh.apps.googleusercontent.com',SH='https://sheets.googleapis.com/v4/spreadsheets/';
+const $=s=>document.querySelector(s),e=s=>String(s??'').replace(/[&<>"]/g,c=>'&#'+c.charCodeAt(0)+';'),
+R=n=>'₹'+(+n||0).toLocaleString('en-IN',{maximumFractionDigits:2}),
+nz=s=>String(s).toLowerCase().replace(/[^a-z0-9\u0b80-\u0bff]/g,''),
+ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const H={Settings:['key','value'],Products:['id','name','part','alt','hsn','price','cost','gst','stock','rack','cupboard','box','brand','group','maxdisc','minstock'],Invoices:['no','date','cust','phone','sub','cgst','sgst','total','disc'],InvoiceItems:['no','name','part','hsn','qty','rate','gst','amount','disc','brand','ask'],Purchases:['id','date','supplier','bill','sub','gst','total'],PurchaseItems:['pid','name','part','qty','cost','gst','amount'],Expenses:['id','date','cat','amount','note'],Suppliers:['id','name','phone','brands'],Wanted:['id','date','item','part','brand','qty'],Orders:['id','date','supplier','item','part','brand','qty','got','status','ignore'],Enquiries:['id','date','item','part','brand','customer','phone','pid']};
+const PF=[['name','Name used in shop'],['part','Part number'],['alt','Other names (comma separated)'],['hsn','HSN code'],['price','Selling price'],['cost','Purchase price'],['gst','GST %'],['stock','Stock'],['rack','Rack'],['cupboard','Cupboard'],['box','Box'],['brand','Brand (Hero, Honda, TVS, Fiam, Swiss...)'],['group','Same-part group (example: splendor side mirror)'],['maxdisc','Max discount % allowed (blank = no limit)'],['minstock','Minimum stock (below this goes to Wanted)']];
+let tc,tok,sid,S={},D={Products:[],Invoices:[],InvoiceItems:[],Purchases:[],PurchaseItems:[],Expenses:[],Suppliers:[],Wanted:[],Orders:[],Enquiries:[]},cart=[],pc2=[],tab='home',iq='',eno='',eo=[],ws='',enqPre='',bd='';
+function gl(){tc=google.accounts.oauth2.initTokenClient({client_id:CID,scope:'https://www.googleapis.com/auth/drive.file',callback:()=>{}})}
+function auth(p){return new Promise((ok,no)=>{tc.callback=r=>r.access_token?(tok=r.access_token,ok()):no(new Error(r.error||'Login failed'));tc.requestAccessToken({prompt:p})})}
+async function api(u,o={},t=1){const r=await fetch(u,{...o,headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'}});
+ if(r.status==401&&t){await auth('');return api(u,o,0)}
+ if(!r.ok)throw new Error((await r.text()).slice(0,200));return r.json()}
+const busy=async f=>{document.body.style.opacity=.5;try{await f()}catch(x){alert(x.message)}document.body.style.opacity=1};
+async function login(){try{await auth('');await boot()}catch(x){$('#er').textContent=x.message}}
+async function ensureTabs(){
+ const m=await api(SH+sid+'?fields=sheets.properties.title'),have=m.sheets.map(s=>s.properties.title),need=Object.keys(H).filter(k=>!have.includes(k));
+ await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:['Products','Invoices','InvoiceItems'].filter(k=>have.includes(k)).map(k=>({range:k+'!A1',values:[H[k]]}))})});if(!need.length)return;
+ await api(SH+sid+':batchUpdate',{method:'POST',body:JSON.stringify({requests:need.map(k=>({addSheet:{properties:{title:k}}}))})});
+ await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:need.map(k=>({range:k+'!A1',values:[H[k]]}))})})}
+async function boot(){
+ sid=localStorage.sid;
+ if(sid){try{await ensureTabs();await load()}catch(x){sid=null}}
+ if(!sid){
+  const f=await api('https://www.googleapis.com/drive/v3/files?fields=files(id)&q='+encodeURIComponent("name='Billing App Data' and trashed=false"));
+  if(f.files.length)sid=f.files[0].id;
+  else{const c=await api(SH,{method:'POST',body:JSON.stringify({properties:{title:'Billing App Data'},sheets:Object.keys(H).map(t=>({properties:{title:t}}))})});sid=c.spreadsheetId;
+   await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:Object.keys(H).map(t=>({range:t+'!A1',values:[H[t]]}))})})}
+  localStorage.sid=sid;await ensureTabs();await load()}
+ $('#lg').hidden=true;$('#v').hidden=false;$('#nv').hidden=false;
+ $('#nv').innerHTML=[['home','Home'],['bill','New bill'],['items','Items'],['buy','Purchase'],['more','More']].map(t=>`<button id="n_${t[0]}" onclick="go('${t[0]}')">${t[1]}</button>`).join('');go('home')}
+async function load(){
+ const r=await api(SH+sid+'/values:batchGet?'+Object.keys(H).map(t=>'ranges='+t).join('&')),K=Object.keys(H);
+ r.valueRanges.forEach((v,i)=>{const t=K[i],rows=(v.values||[]).slice(1);
+  if(t=='Settings'){S={};rows.forEach(x=>S[x[0]]=x[1]||'')}
+  else D[t]=rows.map((x,j)=>{const o={_r:j+2};H[t].forEach((k,n)=>o[k]=x[n]??'');return o}).filter(o=>o[H[t][0]]!=='')});
+ S.next=S.next||'1'}
+const add=(t,rows)=>api(SH+sid+'/values/'+t+'!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',body:JSON.stringify({values:rows})});
+const saveS=async()=>{await api(SH+sid+'/values/Settings!A1:B60:clear',{method:'POST'});
+ await api(SH+sid+'/values/Settings!A1?valueInputOption=RAW',{method:'PUT',body:JSON.stringify({values:[['key','value'],...Object.entries(S)]})})};
+function go(t){tab=t;document.querySelectorAll('#nv button').forEach(b=>b.classList.toggle('on',b.id=='n_'+t));
+ if(t!='bill'&&eno){eno='';eo=[];cart=[]}if(t!='buy')pc2=[];$('#v').innerHTML={home,bill,items,buy,more,rep,exp,set,priv,want,enq}[t]();if(t=='bill')rc();if(t=='items')il();if(t=='buy')rb();if(t=='rep')drawRep()}
+/* HOME */
+function home(){
+ const now=new Date(),cur=ymd(now).slice(0,7),im=gi(),m={};let td=0;
+ D.Invoices.forEach(i=>{const v=isv(i,im).total,k=i.date.slice(0,7);m[k]=(m[k]||0)+v;if(i.date==ymd(now))td+=v});
+ let p=0;for(let k=1;k<=3;k++){const d=new Date(now.getFullYear(),now.getMonth()-k,1);p+=m[ymd(d).slice(0,7)]||0}
+ const avg=p/3,th=m[cur]||0,pc=avg?(th-avg)/avg*100:null,sv=D.Products.reduce((a,x)=>a+ +x.stock*+x.cost,0);
+ return `<h1>${e(S.shop||'My shop')}</h1><div class="g">
+ <div class="c"><div class="m">Stock value</div><div class="big">${R(sv)}</div><div class="m">${D.Products.length} items</div></div>
+ <div class="c"><div class="m">Today's sale</div><div class="big">${R(td)}</div></div></div>
+ <div class="c"><div class="m">This month's sale</div><div class="big">${R(th)}</div>
+ <div class="${pc==null?'m':pc>=0?'up':'dn'}">${pc==null?'No earlier months yet':(pc>=0?'▲ ':'▼ ')+Math.abs(pc).toFixed(1)+'% vs last 3 months average ('+R(avg)+')'}</div></div>
+ <div class="g"><button class="b s" onclick="go('rep')">Reports</button><button class="b s" onclick="go('exp')">Expenses</button></div><h2>Recent bills</h2>
+ <div class="c">${D.Invoices.filter(i=>isv(i,im).n>0).slice(-20).reverse().map(i=>`<div class="it r" onclick="openB('${e(i.no)}')"><div>${e(i.no)} · ${e(i.cust)}<div class="m">${e(i.date)} · ${R(isv(i,im).total)}</div></div><span class="m">Open</span></div>`).join('')||'<div class="m">No bills yet. Tap New bill.</div>'}</div>`}
+/* ITEMS */
+function items(){return `<div class="r"><h1>Items</h1><button class="b" onclick="editP()">Add item</button></div>
+ <input id="iq" placeholder="Search by part number or any name" value="${e(iq)}" oninput="iq=this.value;il()"><div id="il"></div>`}
+const fp=q=>{const tk=String(q).toLowerCase().split(/\s+/).map(nz).filter(Boolean);return tk.length?D.Products.filter(p=>{const h=nz([p.name,p.part,p.brand,p.group,p.alt].join(' '));return tk.every(x=>h.includes(x))}):D.Products};
+const loc=p=>[p.rack&&'Rack '+p.rack,p.cupboard&&'Cupboard '+p.cupboard,p.box&&'Box '+p.box].filter(Boolean).join(' · ');
+function il(){$('#il').innerHTML=fp(iq).slice(0,60).map(p=>`<div class="c" onclick="editP('${p.id}')"><div class="r"><b>${e(p.name)}</b><span>${R(p.price)}</span></div><div class="m">${e(p.brand)} ${e(p.part)} · Stock ${e(p.stock)}</div><div class="m">${e(loc(p))}</div></div>`).join('')||'<div class="m">No items found.</div>'}
+function editP(id){const p=D.Products.find(x=>x.id==id)||{};
+ $('#dlg').innerHTML=`<h2>${id?'Edit item':'New item'}</h2>`+PF.map(([k,l])=>`<label>${l}</label><input id="f_${k}" value="${e(p[k])}">`).join('')+`<div class="r"><button class="b s" onclick="dlg.close()">Cancel</button><button class="b" onclick="saveP('${id||''}')">Save item</button></div>${id?`<button class="b s" style="width:100%;margin-top:10px;color:var(--bad)" onclick="delP('${id}')">Delete item</button>`:''}`;
+ $('#dlg').showModal()}
+function saveP(id){busy(async()=>{const v=PF.map(([k])=>$('#f_'+k).value.trim());if(!v[0])throw new Error('Enter the item name');
+ const p=D.Products.find(x=>x.id==id),row=[p?p.id:String(Date.now()),...v];
+ if(p)await api(SH+sid+`/values/Products!A${p._r}:P${p._r}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[row]})});else await add('Products',[row]);
+ await load();$('#dlg').close();go('items');il()})}
+function delP(id){const p=D.Products.find(x=>x.id==id);if(!p||!confirm('Delete '+p.name+'?'))return;busy(async()=>{await api(SH+sid+`/values/Products!A${p._r}:P${p._r}:clear`,{method:'POST'});$('#dlg').close();await load();go('items')})}
+/* BILL */
+function bill(){const i=D.Invoices.find(v=>v.no==eno)||{};return `<h1>${eno?'Edit '+e(eno):'New bill'}</h1><div class="c"><label>Customer name</label><input id="cn" value="${e(i.cust)}"><label>Phone</label><input id="cp" type="tel" value="${e(i.phone)}">
+ <label>Add item (part number, brand or any name)</label><input id="bq" oninput="rs()"><div id="res"></div></div><div id="ct"></div>`}
+function rs(){const v=$('#bq').value,l=v?fp(v).slice(0,6):[];
+ $('#res').innerHTML=l.map(p=>`<div class="it r" onclick="addC('${p.id}')"><div>${e(p.name)}<div class="m">${e(p.brand)} · ${e(p.part)} · ${e(loc(p))}</div></div><div class="m">Stock ${e(p.stock)}<br>${R(p.price)}</div></div>`).join('')+(v&&!l.length?`<button class="b s" onclick="enqPre=$('#bq').value;go('enq')">Not found. Log enquiry for "${e(v)}"</button>`:'')}
+function addC(id){const p=D.Products.find(x=>x.id==id),c=cart.find(x=>x.id==id),q=$('#bq').value;
+ if(c)c.qty++;else cart.push({id,r:p._r,name:p.name,part:p.part,hsn:p.hsn,qty:1,rate:+p.price,gst:+p.gst,stock:+p.stock,maxd:+p.maxdisc||0,brand:p.brand||'',ask:(p.brand&&nz(q).includes(nz(p.brand)))?'B':'',dt:''});
+ $('#bq').value='';$('#res').innerHTML='';rc()}
+function pd(s,b){s=String(s||'').trim();if(!s)return 0;return s.endsWith('%')?b*(parseFloat(s)||0)/100:(parseFloat(s)||0)}
+function calc(){const L=cart.map(c=>{const g=c.qty*c.rate;return{...c,gross:g,cap:c.maxd?g*c.maxd/100:g,disc:0,hit:false}}),G=L.reduce((s,x)=>s+x.gross,0),man=[],auto=[];
+ L.forEach(x=>{if(String(x.dt||'').trim()!==''){const w=pd(x.dt,x.gross);x.disc=Math.min(w,x.cap);x.hit=w>x.cap+.005;man.push(x)}else auto.push(x)});
+ const M=man.reduce((s,x)=>s+x.disc,0),B=Math.min(pd(bd,G),L.reduce((s,x)=>s+x.cap,0));let rem=Math.max(0,B-M),act=auto.slice();
+ for(let k=0;k<6&&rem>.005&&act.length;k++){const tg=act.reduce((s,x)=>s+x.gross,0)||1;let used=0;act.forEach(x=>{const s=Math.min(x.cap-x.disc,rem*x.gross/tg);x.disc+=s;used+=s});rem-=used;act=act.filter(x=>x.cap-x.disc>.005)}
+ L.forEach(x=>{x.disc=Math.round(x.disc*100)/100;x.amt=x.gross-x.disc});
+ const sub=L.reduce((s,x)=>s+x.amt,0),tax=L.reduce((s,x)=>s+x.amt*x.gst/100,0);return{L,sub,tax,disc:L.reduce((s,x)=>s+x.disc,0),total:Math.round(sub+tax),short:rem>.01}}
+function rc(){const t=calc();
+ $('#ct').innerHTML=cart.length?`<div class="c">${t.L.map((c,i)=>`<div class="it"><div class="r"><b>${e(c.name)}</b><button class="b s" onclick="cart.splice(${i},1);rc()">✕</button></div>
+ <div class="m">${e(c.brand)}${c.maxd?' · max discount '+c.maxd+'%':''}</div>
+ <div class="g"><div><label>Qty</label><input type="number" value="${c.qty}" onchange="cart[${i}].qty=+this.value;rc()"></div><div><label>Rate (MRP, before GST)</label><input type="number" value="${c.rate}" onchange="cart[${i}].rate=+this.value;rc()"></div></div>
+ <label>Discount on this item (₹ or %, example 50 or 10%)${c.disc>0?' = '+R(c.disc):''}${c.hit?' · limit reached':''}</label><input value="${e(cart[i].dt)}" placeholder="auto from bill discount" onchange="cart[${i}].dt=this.value.trim();rc()"><div class="m">GST ${c.gst}% · line total ${R(c.amt)}</div></div>`).join('')}
+ <label>Bill discount (₹ or %, example 100 or 10%)</label><input value="${e(bd)}" onchange="bd=this.value.trim();rc()">${t.short?'<div class="dn">Item limits reached, bill discount not fully applied.</div>':''}
+ <div class="r it"><span>Discount given</span><span>${R(t.disc)}</span></div><div class="r"><span>Taxable value</span><span>${R(t.sub)}</span></div><div class="r"><span>CGST</span><span>${R(t.tax/2)}</span></div><div class="r"><span>SGST</span><span>${R(t.tax/2)}</span></div>
+ <div class="r it"><b>Total</b><span class="big">${R(t.total)}</span></div></div><button class="b" style="width:100%" onclick="saveB()">${eno?'Save changes':'Save bill'}</button>${eno?`<button class="b s" style="width:100%;margin-top:8px" onclick="eno='';eo=[];cart=[];bd='';go('home')">Cancel edit</button>`:''}`:''}
+async function stk(a,b){const dl={};a.forEach(o=>{if(o.r)dl[o.r]=(dl[o.r]||0)+ +o.qty});b.forEach(c=>{if(c.r)dl[c.r]=(dl[c.r]||0)-c.qty});
+ const d=Object.keys(dl).filter(r=>dl[r]).map(r=>({range:'Products!I'+r,values:[[+D.Products.find(p=>p._r==r).stock+dl[r]]]}));
+ if(d.length)await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:d})})}
+const clr=L=>L.length?api(SH+sid+'/values:batchClear',{method:'POST',body:JSON.stringify({ranges:L.map(x=>`InvoiceItems!A${x._r}:K${x._r}`)})}):0;
+function saveB(){busy(async()=>{if(!cart.length)throw new Error('Add items first');const t=calc(),cu=$('#cn').value||'Customer',ph=$('#cp').value,no=eno||(S.prefix||'INV-')+String(S.next).padStart(4,'0');let dt=ymd(new Date());
+ const row=()=>[no,dt,cu,ph,t.sub.toFixed(2),(t.tax/2).toFixed(2),(t.tax/2).toFixed(2),t.total,t.disc.toFixed(2)];
+ if(eno){const i=D.Invoices.find(x=>x.no==eno);dt=i.date;
+  await api(SH+sid+`/values/Invoices!A${i._r}:I${i._r}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[row()]})});
+  await clr(D.InvoiceItems.filter(x=>x.no==eno))}
+ else await add('Invoices',[row()]);
+ await add('InvoiceItems',t.L.map(c=>[no,c.name,c.part,c.hsn,c.qty,c.rate,c.gst,c.amt.toFixed(2),c.disc.toFixed(2),c.brand||'',c.ask||'']));
+ await stk(eo,cart);
+ if(!eno){S.next=String(+S.next+1);await saveS()}
+ eno='';eo=[];cart=[];bd='';await load();go('home');openB(no)})}
+function openB(no){const i=D.Invoices.find(x=>x.no==no);
+ $('#dlg').innerHTML=`<h2>${e(no)}</h2><div class="m">${e(i.cust)} · ${R(i.total)}</div><div class="g" style="margin:12px 0"><button class="b" onclick="share('${e(no)}')">PDF</button><button class="b" onclick="shareImg('${e(no)}')">Image (JPG)</button><button class="b s" onclick="dlg.close();editB('${e(no)}')">Edit</button><button class="b s" onclick="delB('${e(no)}')">Delete</button></div><button class="b s" onclick="dlg.close()">Close</button>`;
+ $('#dlg').showModal()}
+function editB(no){eno=no;bd='';cart=D.InvoiceItems.filter(x=>x.no==no).map(o=>{const p=D.Products.find(x=>x.name==o.name&&x.part==o.part);return{id:p?p.id:'',r:p?p._r:0,name:o.name,part:o.part,hsn:o.hsn,qty:+o.qty,rate:+o.rate,gst:+o.gst,maxd:p?+p.maxdisc||0:0,brand:p?p.brand:o.brand||'',ask:o.ask||'',dt:+o.disc?String(o.disc):''}});eo=cart.map(c=>({r:c.r,qty:c.qty}));go('bill')}
+function delB(no){if(!confirm('Delete '+no+'? Stock will be added back.'))return;busy(async()=>{const i=D.Invoices.find(x=>x.no==no),L=D.InvoiceItems.filter(x=>x.no==no);
+ await stk(L.map(o=>{const p=D.Products.find(x=>x.name==o.name&&x.part==o.part);return{r:p?p._r:0,qty:o.qty}}),[]);
+ await api(SH+sid+'/values:batchClear',{method:'POST',body:JSON.stringify({ranges:[`Invoices!A${i._r}:I${i._r}`,...L.map(x=>`InvoiceItems!A${x._r}:K${x._r}`)]})});
+ $('#dlg').close();await load();go('home')})}
+/* PDF */
+function mk(no){const i=D.Invoices.find(x=>x.no==no),L=D.InvoiceItems.filter(x=>x.no==no),d=new jspdf.jsPDF({unit:'mm',format:'a4'});let y=18;
+ if(S.logo)try{d.addImage(S.logo,'JPEG',14,10,22,22)}catch(x){}
+ d.setFont('helvetica','bold').setFontSize(16).text(S.shop||'Shop',40,16);
+ d.setFont('helvetica','normal').setFontSize(9).text([...d.splitTextToSize(S.addr||'',100),'Ph: '+(S.phone||''),S.gstin?'GSTIN: '+S.gstin:''],40,21);
+ d.setFont('helvetica','bold').setFontSize(12).text('TAX INVOICE',196,16,{align:'right'});
+ d.setFont('helvetica','normal').setFontSize(10).text(['No: '+i.no,'Date: '+i.date],196,22,{align:'right'});
+ d.text('Bill to: '+i.cust+(i.phone?'  ('+i.phone+')':''),14,42);d.line(14,46,196,46);y=52;
+ const hd=()=>{d.setFont('helvetica','bold').setFontSize(9);d.text('Item',14,y);d.text('HSN',92,y);d.text('Qty',110,y);d.text('Rate',122,y);d.text('Disc',140,y);d.text('GST%',158,y);d.text('Amount',196,y,{align:'right'});d.line(14,y+2,196,y+2);y+=8;d.setFont('helvetica','normal')};
+ hd();L.forEach(x=>{if(y>245){d.addPage();y=20;hd()}d.text(String(x.name).slice(0,38),14,y);d.text(String(x.hsn),92,y);d.text(String(x.qty),110,y);d.text(String(x.rate),122,y);d.text(+x.disc?String(x.disc):'-',140,y);d.text(String(x.gst),158,y);d.text((+x.amount).toFixed(2),196,y,{align:'right'});y+=7});
+ d.line(14,y,196,y);y+=7;[...(+i.disc?[['Discount given',i.disc]]:[]),['Taxable value',i.sub],['CGST',i.cgst],['SGST',i.sgst]].forEach(a=>{d.text(a[0],150,y);d.text((+a[1]).toFixed(2),196,y,{align:'right'});y+=6});
+ d.setFont('helvetica','bold').setFontSize(12).text('Total  Rs. '+i.total,196,y+3,{align:'right'});
+ d.setFont('helvetica','normal').setFontSize(8).text(d.splitTextToSize('Terms: '+(S.terms||''),110),14,268);
+ if(S.sign)try{d.addImage(S.sign,'JPEG',156,262,36,16)}catch(x){}
+ d.setFontSize(8).text('Authorised signatory',196,284,{align:'right'});return d}
+async function share(no){const d=mk(no),f=new File([d.output('blob')],no+'.pdf',{type:'application/pdf'});
+ if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:no});return}catch(x){if(x.name=='AbortError')return}}
+ d.save(no+'.pdf');const ph=(D.Invoices.find(x=>x.no==no).phone||'').replace(/\D/g,'');
+ window.open('https://wa.me/'+(ph.length==10?'91'+ph:ph)+'?text='+encodeURIComponent('Invoice '+no),'_blank')}
+async function mkImg(no){const i=D.Invoices.find(v=>v.no==no),L=D.InvoiceItems.filter(v=>v.no==no),k=7.56,c=document.createElement('canvas');c.width=210*k;c.height=297*k;const x=c.getContext('2d');
+ const ld=s=>new Promise(r=>{if(!s)return r(null);const m=new Image();m.onload=()=>r(m);m.onerror=()=>r(null);m.src=s});
+ const T=(s,X,Y,z,b,a)=>{x.font=(b?'700 ':'400 ')+z*.3528*k+'px sans-serif';x.textAlign=a||'left';x.fillText(String(s),X*k,Y*k)};
+ const W=(s,mx,z)=>{x.font=z*.3528*k+'px sans-serif';const o=[];let l='';String(s).split(/\s+/).forEach(w=>{const q=l?l+' '+w:w;if(x.measureText(q).width>mx*k&&l){o.push(l);l=w}else l=q});if(l)o.push(l);return o};
+ x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.fillStyle='#000';
+ const lg=await ld(S.logo),sg=await ld(S.sign);if(lg)x.drawImage(lg,14*k,10*k,22*k,22*k);
+ T(S.shop||'Shop',40,16,16,1);let y=21;W(S.addr||'',100,9).forEach(l=>{T(l,40,y,9);y+=4});T('Ph: '+(S.phone||''),40,y,9);if(S.gstin)T('GSTIN: '+S.gstin,40,y+4,9);
+ T('TAX INVOICE',196,16,12,1,'right');T('No: '+i.no,196,22,10,0,'right');T('Date: '+i.date,196,27,10,0,'right');
+ T('Bill to: '+i.cust+(i.phone?'  ('+i.phone+')':''),14,42,10);x.fillRect(14*k,46*k,182*k,.3*k);y=52;
+ [['Item',14],['HSN',92],['Qty',110],['Rate',122],['Disc',140],['GST%',158]].forEach(a=>T(a[0],a[1],y,9,1));T('Amount',196,y,9,1,'right');x.fillRect(14*k,(y+2)*k,182*k,.3*k);y+=8;
+ L.forEach(r=>{T(String(r.name).slice(0,38),14,y,9);T(r.hsn,92,y,9);T(r.qty,110,y,9);T(r.rate,122,y,9);T(+r.disc?r.disc:'-',140,y,9);T(r.gst,158,y,9);T((+r.amount).toFixed(2),196,y,9,0,'right');y+=7});
+ x.fillRect(14*k,y*k,182*k,.3*k);y+=7;[...(+i.disc?[['Discount given',i.disc]]:[]),['Taxable value',i.sub],['CGST',i.cgst],['SGST',i.sgst]].forEach(a=>{T(a[0],150,y,10);T((+a[1]).toFixed(2),196,y,10,0,'right');y+=6});
+ T('Total  Rs. '+i.total,196,y+3,12,1,'right');
+ let ty=268;W('Terms: '+(S.terms||''),110,8).forEach(l=>{T(l,14,ty,8);ty+=3.6});
+ if(sg)x.drawImage(sg,156*k,262*k,36*k,16*k);T('Authorised signatory',196,284,8,0,'right');return c}
+async function shareImg(no){const c=await mkImg(no),b=await new Promise(r=>c.toBlob(r,'image/jpeg',.92)),f=new File([b],no+'.jpg',{type:'image/jpeg'});
+ if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:no});return}catch(x){if(x.name=='AbortError')return}}
+ const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=no+'.jpg';a.click()}
+
+/* PURCHASE */
+function buy(){return `<h1>Purchase entry</h1><div class="c"><label>Supplier</label><input id="su"><label>Supplier bill number</label><input id="sb"><label>Date</label><input id="sd" type="date" value="${ymd(new Date())}">
+ <label>Add item (part number or any name)</label><input id="pq" oninput="rb()"><div id="pres"></div></div><div id="pct"></div>
+ <h2>Recent purchases</h2><div class="c">${D.Purchases.slice(-10).reverse().map(x=>`<div class="it r" onclick="openP('${x.id}')"><div>${e(x.supplier)} · ${e(x.bill)}<div class="m">${e(x.date)} · ${R(x.total)}</div></div><span class="m">Open</span></div>`).join('')||'<div class="m">No purchases yet.</div>'}</div>`}
+function rb(){const q=$('#pq');if(q){const l=q.value?fp(q.value).slice(0,6):[];$('#pres').innerHTML=l.map(p=>`<div class="it r" onclick="addPC('${p.id}')"><div>${e(p.name)}<div class="m">${e(p.part)}</div></div><div class="m">Stock ${e(p.stock)}<br>Cost ${R(p.cost)}</div></div>`).join('')}
+ const t=ptot();$('#pct').innerHTML=pc2.length?`<div class="c">${pc2.map((c,i)=>`<div class="it"><div class="r"><b>${e(c.name)}</b><button class="b s" onclick="pc2.splice(${i},1);rb()">✕</button></div>
+ <div class="g"><div><label>Qty received</label><input type="number" value="${c.qty}" onchange="pc2[${i}].qty=+this.value;rb()"></div><div><label>Cost (before GST)</label><input type="number" value="${c.cost}" onchange="pc2[${i}].cost=+this.value;rb()"></div></div>
+ <label>GST %</label><input type="number" value="${c.gst}" onchange="pc2[${i}].gst=+this.value;rb()"></div>`).join('')}
+ <div class="r it"><span>Subtotal</span><span>${R(t.sub)}</span></div><div class="r"><span>GST paid</span><span>${R(t.gst)}</span></div><div class="r it"><b>Total</b><span class="big">${R(t.sub+t.gst)}</span></div></div>
+ <button class="b" style="width:100%" onclick="saveP2()">Save purchase and add stock</button>`:''}
+function addPC(id){const p=D.Products.find(x=>x.id==id),c=pc2.find(x=>x.id==id);if(c)c.qty++;else pc2.push({id,r:p._r,name:p.name,part:p.part,qty:1,cost:+p.cost||0,gst:+p.gst||0,stock:+p.stock||0});$('#pq').value='';$('#pres').innerHTML='';rb()}
+const ptot=()=>{let sub=0,gst=0;pc2.forEach(c=>{const a=c.qty*c.cost;sub+=a;gst+=a*c.gst/100});return{sub,gst}};
+function saveP2(){busy(async()=>{if(!pc2.length)throw new Error('Add items first');const t=ptot(),id='P'+Date.now(),dt=$('#sd').value||ymd(new Date());
+ await add('Purchases',[[id,dt,$('#su').value||'Supplier',$('#sb').value,t.sub.toFixed(2),t.gst.toFixed(2),(t.sub+t.gst).toFixed(2)]]);
+ await add('PurchaseItems',pc2.map(c=>[id,c.name,c.part,c.qty,c.cost,c.gst,(c.qty*c.cost).toFixed(2)]));
+ await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:pc2.flatMap(c=>[{range:'Products!I'+c.r,values:[[c.stock+c.qty]]},{range:'Products!G'+c.r,values:[[c.cost]]}])})});
+ await recv(pc2,$('#su').value);pc2=[];await load();go('buy')})}
+function openP(id){const x=D.Purchases.find(v=>v.id==id);$('#dlg').innerHTML=`<h2>${e(x.supplier)}</h2><div class="m">${e(x.bill)} · ${e(x.date)} · ${R(x.total)}</div>${D.PurchaseItems.filter(i=>i.pid==id).map(i=>`<div class="it">${e(i.name)} · ${e(i.qty)} x ${e(i.cost)}</div>`).join('')}<div class="g" style="margin-top:12px"><button class="b s" style="color:var(--bad)" onclick="delPur('${id}')">Delete</button><button class="b s" onclick="dlg.close()">Close</button></div>`;$('#dlg').showModal()}
+function delPur(id){if(!confirm('Delete this purchase? Stock will be reduced back.'))return;busy(async()=>{const x=D.Purchases.find(v=>v.id==id),L=D.PurchaseItems.filter(i=>i.pid==id),d=[];
+ L.forEach(i=>{const p=D.Products.find(z=>z.name==i.name&&z.part==i.part);if(p)d.push({range:'Products!I'+p._r,values:[[+p.stock-+i.qty]]})});
+ if(d.length)await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:d})});
+ await api(SH+sid+'/values:batchClear',{method:'POST',body:JSON.stringify({ranges:[`Purchases!A${x._r}:G${x._r}`,...L.map(i=>`PurchaseItems!A${i._r}:G${i._r}`)]})});
+ $('#dlg').close();await load();go('buy')})}
+/* EXPENSES */
+const EC=['Rent','Electricity','Salary','Petty cash','Pooja','Transport','Other'];
+function exp(){const mo=ymd(new Date()).slice(0,7),tm=D.Expenses.filter(x=>x.date.slice(0,7)==mo).reduce((a,x)=>a+ +x.amount,0);
+ return `<h1>Expenses</h1><div class="c"><div class="m">This month</div><div class="big">${R(tm)}</div></div><div class="c"><label>Date</label><input id="xd" type="date" value="${ymd(new Date())}">
+ <label>Type</label><input id="xc" list="xl" placeholder="Rent, Electricity, Petty cash..."><datalist id="xl">${[...new Set([...EC,...D.Expenses.map(x=>x.cat)])].map(c=>`<option value="${e(c)}">`).join('')}</datalist>
+ <label>Amount</label><input id="xa" type="number"><label>Note</label><input id="xn"><button class="b" onclick="saveX()">Add expense</button></div>
+ <h2>Recent</h2><div class="c">${D.Expenses.slice(-20).reverse().map(x=>`<div class="it r"><div>${e(x.cat)}<div class="m">${e(x.date)} · ${e(x.note)}</div></div><div class="r"><b>${R(x.amount)}</b><button class="b s" onclick="delX('${x.id}')">✕</button></div></div>`).join('')||'<div class="m">No expenses yet.</div>'}</div>`}
+function saveX(){busy(async()=>{const a=+$('#xa').value;if(!a)throw new Error('Enter the amount');await add('Expenses',[['X'+Date.now(),$('#xd').value,$('#xc').value||'Other',a,$('#xn').value]]);await load();go('exp')})}
+function delX(id){if(!confirm('Delete this expense?'))return;busy(async()=>{const x=D.Expenses.find(v=>v.id==id);await api(SH+sid+`/values/Expenses!A${x._r}:E${x._r}:clear`,{method:'POST'});await load();go('exp')})}
+/* GST SPLIT HELPERS */
+const ng=()=>S.incng=='1';
+const gi=()=>{const m={};D.InvoiceItems.forEach(x=>(m[x.no]=m[x.no]||[]).push(x));return m},gp=()=>{const m={};D.PurchaseItems.forEach(x=>(m[x.pid]=m[x.pid]||[]).push(x));return m};
+function sp(i,m,g){let sub=0,tax=0,n=0;(m[i.no]||[]).forEach(x=>{if((+x.gst>0)!=g)return;const a=+x.amount;sub+=a;tax+=g?a*x.gst/100:0;n++});return{sub,tax,total:sub+tax,n}}
+function pp(p,m,g){let sub=0,gst=0,n=0;(m[p.id]||[]).forEach(x=>{if((+x.gst>0)!=g)return;const a=+x.amount;sub+=a;gst+=g?a*x.gst/100:0;n++});return{sub,gst,total:sub+gst,n}}
+const isv=(i,m)=>ng()?{sub:+i.sub,tax:+i.cgst+ +i.sgst,total:+i.total,n:1}:sp(i,m,true);
+const psv=(p,m)=>ng()?{sub:+p.sub,gst:+p.gst,total:+p.total,n:1}:pp(p,m,true);
+/* MORE */
+function more(){const d1=ymd(new Date()).slice(0,8)+'01',d2=ymd(new Date());
+ return `<h1>More</h1>${[['want','Wanted and orders'],['enq','Enquiries'],['rep','Reports and graphs'],['exp','Expenses'],['set','Settings']].map(a=>`<div class="c r" onclick="go('${a[0]}')"><b>${a[1]}</b><span class="m">Open</span></div>`).join('')}
+ <div class="c"><b>Export GST file for CA (Excel)</b><div class="m">GST bills, GST purchases, GST summary, expenses and GST item stock.</div><label>From</label><input id="ef" type="date" value="${d1}"><label>To</label><input id="et" type="date" value="${d2}"><button class="b" onclick="xl('g')">Download GST file</button></div>
+ <div style="text-align:center;margin-top:36px;opacity:.12;font-size:22px;padding:14px" onclick="go('priv')">•</div>`}
+function priv(){const cur=ymd(new Date()).slice(0,7),M=months(4),cost={},inv={};D.Products.forEach(p=>cost[p.name+'|'+p.part]=+p.cost||0);D.Invoices.forEach(i=>inv[i.no]=i);
+ const row=(g,mo)=>{let s=0,c=0;D.InvoiceItems.forEach(x=>{const i=inv[x.no];if(!i||i.date.slice(0,7)!=mo||((+x.gst>0)!=g))return;s+=+x.amount;c+=x.qty*(cost[x.name+'|'+x.part]||0)});return{s,mg:s?(s-c)/s*100:0}};
+ const tr=M.map(k=>{const a=row(false,k),b=row(true,k);return `<div class="it"><div class="m">${k}</div><div class="r"><span>Non-GST sales</span><b>${R(a.s)}</b></div><div class="r"><span>Non-GST margin</span><b>${a.mg.toFixed(1)}%</b></div><div class="r"><span>GST sales (before tax)</span><b>${R(b.s)}</b></div><div class="r"><span>GST margin</span><b>${b.mg.toFixed(1)}%</b></div></div>`}).join('');
+ const it={};D.InvoiceItems.forEach(x=>{const i=inv[x.no];if(!i||i.date.slice(0,7)!=cur||+x.gst>0)return;const o=it[x.name]=it[x.name]||{s:0,c:0};o.s+=+x.amount;o.c+=x.qty*(cost[x.name+'|'+x.part]||0)});
+ const lst=Object.entries(it).sort((a,b)=>b[1].s-a[1].s).map(([n,o])=>`<div class="it r"><span>${e(n)}</span><span>${R(o.s)} · ${o.s?((o.s-o.c)/o.s*100).toFixed(1):0}%</span></div>`).join('');
+ return `<h1>Private</h1><div class="c"><b>Include Non-GST in Home and Reports</b><div class="m">Now: ${ng()?'included':'hidden'}. Turn on to see your full cash position.</div><button class="b s" onclick="S.incng=S.incng=='1'?'':'1';busy(saveS).then(()=>go('priv'))">${ng()?'Turn off':'Turn on'}</button></div>
+ <div class="c"><b>Month by month</b>${tr}<div class="m">Margin uses the current purchase price of each item.</div></div>
+ <div class="c"><b>Non-GST items this month</b>${lst||'<div class="m">None</div>'}</div>
+ <div class="c"><b>Export Non-GST file</b><label>From</label><input id="ef" type="date" value="${ymd(new Date()).slice(0,8)}01"><label>To</label><input id="et" type="date" value="${ymd(new Date())}"><button class="b" onclick="xl('n')">Download Non-GST file</button></div>
+ <h2>All bills</h2><div class="c">${D.Invoices.slice(-40).reverse().map(i=>`<div class="it r" onclick="openB('${e(i.no)}')"><div>${e(i.no)} · ${e(i.cust)}<div class="m">${e(i.date)} · ${R(i.total)}</div></div><span class="m">Open</span></div>`).join('')}</div>`}
+/* REPORTS */
+const mkey=d=>d.slice(0,7),sum=(a,f)=>a.reduce((s,x)=>s+ +f(x),0);
+function months(n){const o=[],now=new Date();for(let i=n-1;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);o.push(ymd(d).slice(0,7))}return o}
+function bars(title,labels,vals,col){const mx=Math.max(1,...vals.map(Math.abs)),w=300,h=110;
+ return `<div class="c"><b>${title}</b><svg viewBox="0 0 ${w} ${h+34}" width="100%" role="img" aria-label="${title}">${vals.map((v,i)=>{const bw=w/vals.length,bh=Math.abs(v)/mx*h,x=i*bw+bw*.15,y=v>=0?h-bh:h;
+ return `<rect x="${x}" y="${v>=0?h-bh:h}" width="${bw*.7}" height="${bh}" fill="${v<0?'var(--bad)':col}" rx="2"/><text x="${x+bw*.35}" y="${h+14}" font-size="9" text-anchor="middle" fill="currentColor">${labels[i]}</text><text x="${x+bw*.35}" y="${v>=0?h-bh-3:h+bh+10}" font-size="8" text-anchor="middle" fill="currentColor">${Math.round(v/1000*10)/10}k</text>`}).join('')}</svg></div>`}
+function hbars(title,rows,col){const mx=Math.max(1,...rows.map(r=>r[1]));return `<div class="c"><b>${title}</b>${rows.map(r=>`<div style="margin:8px 0"><div class="r"><span>${e(r[0])}</span><span>${R(r[1])}</span></div><div style="height:8px;background:var(--bg);border-radius:4px"><div style="height:8px;width:${r[1]/mx*100}%;background:${col};border-radius:4px"></div></div></div>`).join('')||'<div class="m">No data yet.</div>'}</div>`}
+function rep(){return `<h1>Reports</h1><div id="rp"></div>`}
+function drawRep(){const M=months(6),L=M.map(k=>k.slice(5)),mo=ymd(new Date()).slice(0,7),im=gi(),pm=gp();
+ const IV=D.Invoices.map(i=>({d:i.date,...isv(i,im)})).filter(x=>x.n>0),PV=D.Purchases.map(q=>({d:q.date,...psv(q,pm)})).filter(x=>x.n>0);
+ const sale=M.map(k=>sum(IV.filter(i=>mkey(i.d)==k),i=>i.total)),pur=M.map(k=>sum(PV.filter(i=>mkey(i.d)==k),i=>i.total)),exs=M.map(k=>sum(D.Expenses.filter(i=>mkey(i.date)==k),i=>i.amount));
+ const invd={},costOf={},ok=x=>ng()||+x.gst>0;D.Invoices.forEach(i=>invd[i.no]=i.date);D.Products.forEach(q=>costOf[q.name+'|'+q.part]=+q.cost||0);
+ const cogs=M.map(k=>sum(D.InvoiceItems.filter(x=>ok(x)&&mkey(invd[x.no]||'')==k),x=>x.qty*(costOf[x.name+'|'+x.part]||0)));
+ const profit=M.map((_,i)=>sale[i]-sum(IV.filter(x=>mkey(x.d)==M[i]),x=>x.tax)-cogs[i]-exs[i]);
+ const ps={};D.InvoiceItems.filter(x=>ok(x)&&mkey(invd[x.no]||'')==mo).forEach(x=>ps[x.name]=(ps[x.name]||0)+ +x.amount);
+ const top=Object.entries(ps).sort((a,b)=>b[1]-a[1]).slice(0,8);
+ const mi=IV.filter(i=>mkey(i.d)==mo),mp=PV.filter(i=>mkey(i.d)==mo),outG=sum(mi,i=>i.tax),inG=sum(mp,i=>i.gst),payG=Math.max(0,outG-inG),
+ sl=sum(mi,i=>i.total),pu=sum(mp,i=>i.total),ex=sum(D.Expenses.filter(i=>mkey(i.date)==mo),i=>i.amount),spend=sl-payG-pu-ex;
+ $('#rp').innerHTML=`<div class="c"><div class="m">Money you can use this month</div><div class="big ${spend>=0?'up':'dn'}">${R(spend)}</div>
+ <div class="it r"><span>Sales received</span><span>${R(sl)}</span></div><div class="r"><span>GST to pay to government</span><span class="dn">- ${R(payG)}</span></div><div class="r"><span>Stock purchases</span><span class="dn">- ${R(pu)}</span></div><div class="r"><span>Expenses</span><span class="dn">- ${R(ex)}</span></div>
+ <div class="m" style="margin-top:8px">GST to pay = GST collected on sales (${R(outG)}) minus GST paid on purchases (${R(inG)}). Keep this amount aside.</div></div>`+
+ bars('Sales by month',L,sale,'var(--ac)')+bars('Purchases by month',L,pur,'#4f8fbf')+bars('Profit by month (after GST, stock cost and expenses)',L,profit,'var(--ok)')+bars('Expenses by month',L,exs,'#a06bbf')+
+ hbars('Top items by sales this month',top,'var(--ac)')+
+ `<div class="c"><b>Sales and purchase side by side</b>${M.map((k,i)=>`<div class="it"><div class="m">${k}</div><div class="r"><span>Sales</span><b>${R(sale[i])}</b></div><div class="r"><span>Purchases</span><b>${R(pur[i])}</b></div><div class="r"><span>Difference</span><b class="${sale[i]-pur[i]>=0?'up':'dn'}">${R(sale[i]-pur[i])}</b></div></div>`).join('')}</div>`}
+/* EXCEL */
+function xl(kind){const g=kind=='g',f=$('#ef').value,t=$('#et').value,inr=d=>d>=f&&d<=t,im=gi(),pm=gp(),sh=[],X=(n,h,r)=>sh.push([n,[h,...r]]),st=(a,fn)=>a.reduce((s,x)=>s+ +fn(x),0),cost={};
+ D.Products.forEach(q=>cost[q.name+'|'+q.part]=+q.cost||0);
+ const iv=D.Invoices.filter(i=>inr(i.date)).map(i=>({i,...sp(i,im,g)})).filter(x=>x.n>0),pu=D.Purchases.filter(q=>inr(q.date)).map(q=>({q,...pp(q,pm,g)})).filter(x=>x.n>0);
+ const nos=new Set(iv.map(x=>x.i.no)),pids=new Set(pu.map(x=>x.q.id)),sold=D.InvoiceItems.filter(x=>nos.has(x.no)&&((+x.gst>0)==g)),ex=D.Expenses.filter(x=>inr(x.date));
+ const cg=st(sold,x=>x.qty*(cost[x.name+'|'+x.part]||0)),sales=st(iv,x=>x.sub);
+ if(g){const outG=st(iv,x=>x.tax),inG=st(pu,x=>x.gst);
+  X('Summary',['Item','Amount'],[['From',f],['To',t],['Taxable sales',sales],['CGST collected',outG/2],['SGST collected',outG/2],['Total sales with GST',st(iv,x=>x.total)],['GST paid on purchases',inG],['Net GST payable',outG-inG],['Taxable purchases',st(pu,x=>x.sub)],['Expenses',st(ex,x=>x.amount)]])}
+ else X('Summary',['Item','Amount'],[['From',f],['To',t],['Sales',sales],['Purchases',st(pu,x=>x.total)],['Cost of items sold',cg],['Margin',sales-cg],['Margin %',sales?Math.round((sales-cg)/sales*1000)/10:0]]);
+ X('Sales',['Invoice','Date','Customer','Phone','Taxable','CGST','SGST','Total'],iv.map(x=>[x.i.no,x.i.date,x.i.cust,x.i.phone,x.sub,x.tax/2,x.tax/2,x.total]));
+ X('Sale items',g?['Invoice','Item','Part no','HSN','Qty','Rate','GST %','Amount']:['Invoice','Item','Part no','Qty','Rate','Amount','Cost','Margin %'],
+  sold.map(x=>g?[x.no,x.name,x.part,x.hsn,+x.qty,+x.rate,+x.gst,+x.amount]:[x.no,x.name,x.part,+x.qty,+x.rate,+x.amount,x.qty*(cost[x.name+'|'+x.part]||0),+x.amount?Math.round((x.amount-x.qty*(cost[x.name+'|'+x.part]||0))/x.amount*1000)/10:0]));
+ X('Purchases',['Date','Supplier','Bill no','Taxable','GST','Total'],pu.map(x=>[x.q.date,x.q.supplier,x.q.bill,x.sub,x.gst,x.total]));
+ X('Purchase items',['Supplier bill','Item','Part no','Qty','Cost','GST %','Amount'],D.PurchaseItems.filter(x=>pids.has(x.pid)&&((+x.gst>0)==g)).map(x=>{const q=D.Purchases.find(v=>v.id==x.pid);return[q?q.bill:'',x.name,x.part,+x.qty,+x.cost,+x.gst,+x.amount]}));
+ if(g)X('Expenses',['Date','Type','Amount','Note'],ex.map(x=>[x.date,x.cat,+x.amount,x.note]));
+ X('Stock',['Item','Part no','HSN','Stock','Cost','Stock value'],D.Products.filter(q=>(+q.gst>0)==g).map(q=>[q.name,q.part,q.hsn,+q.stock,+q.cost,(+q.stock||0)*(+q.cost||0)]));
+ const ce=s=>typeof s=='number'?`<Cell><Data ss:Type="Number">${s}</Data></Cell>`:`<Cell><Data ss:Type="String">${String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}</Data></Cell>`;
+ const xml=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">`+sh.map(([n,r])=>`<Worksheet ss:Name="${n}"><Table>${r.map(x=>`<Row>${x.map(ce).join('')}</Row>`).join('')}</Table></Worksheet>`).join('')+`</Workbook>`;
+ const b=new Blob([xml],{type:'application/vnd.ms-excel'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`${g?'GST':'NonGST'}-report-${f}-to-${t}.xls`;a.click()}
+/* WANTED */
+const days=d=>Math.floor((Date.now()-new Date(d+'T00:00:00'))/864e5),pk=(n,q)=>nz(n)+'|'+nz(q);let WR=[];
+function sold90(){const inv={},m={};D.Invoices.forEach(i=>inv[i.no]=i.date);D.InvoiceItems.forEach(x=>{const d=inv[x.no];if(d&&days(d)<=90){const k=pk(x.name,x.part);m[k]=m[k]||{q:0,ask:0};m[k].q+=+x.qty;if(x.ask=='B')m[k].ask+=+x.qty}});return m}
+function wantedRows(){const sd=sold90(),pend={},rows={},thr=+S.enqThr||3;
+ D.Orders.forEach(o=>{if(o.status=='ordered'){const k=pk(o.item,o.part);pend[k]=(pend[k]||0)+Math.max(0,+o.qty-+o.got)}});
+ const add=(k,o)=>{const r=rows[k]=rows[k]||{k,item:o.item,part:o.part,brand:o.brand||'',need:0,why:[]};r.need+=o.need;r.why.push(o.why);if(!r.brand&&o.brand)r.brand=o.brand};
+ D.Products.forEach(p=>{const ms=+p.minstock||0,st=+p.stock||0;if(ms>0&&st<ms){const a=(sd[pk(p.name,p.part)]||{q:0}).q/3;add(pk(p.name,p.part),{item:p.name,part:p.part,brand:p.brand,need:Math.max(1,Math.ceil(a+ms-st)),why:'Low stock'})}});
+ const cnt={};D.Enquiries.filter(x=>days(x.date)<=30).forEach(x=>{const k=pk(x.item,x.part);cnt[k]=cnt[k]||{n:0,x};cnt[k].n++});
+ Object.values(cnt).forEach(c=>{if(c.n>=thr)add(pk(c.x.item,c.x.part),{item:c.x.item,part:c.x.part,brand:c.x.brand,need:c.n,why:c.n+' enquiries'})});
+ D.Wanted.forEach(w=>add(pk(w.item,w.part),{item:w.item,part:w.part,brand:w.brand,need:+w.qty||1,why:'Added by you'}));
+ return Object.values(rows).map(r=>({...r,left:r.need-(pend[r.k]||0)})).filter(r=>r.left>0)}
+const sup=()=>[...new Set([...D.Suppliers.map(x=>x.name),...D.Purchases.map(x=>x.supplier),...D.Orders.map(x=>x.supplier)].filter(Boolean))];
+function sb(name){const s=nz(name),b=new Set();D.Suppliers.filter(x=>nz(x.name)==s).forEach(x=>String(x.brands).split(',').forEach(v=>nz(v)&&b.add(nz(v))));
+ D.Purchases.filter(x=>nz(x.supplier)==s).forEach(x=>D.PurchaseItems.filter(i=>i.pid==x.id).forEach(i=>{const p=D.Products.find(z=>z.name==i.name&&z.part==i.part);if(p&&nz(p.brand))b.add(nz(p.brand))}));return b}
+const late=o=>o.ignore!='1'&&days(o.date)>(+S.lateDays||3);
+function want(){const sd=sold90(),all=wantedRows(),set=ws?sb(ws):null,rows=set&&set.size?all.filter(r=>!nz(r.brand)||set.has(nz(r.brand))):all;WR=rows;
+ const bs=r=>{const p=D.Products.find(x=>pk(x.name,x.part)==r.k);if(!p||!p.group)return '';const al=D.Products.filter(x=>nz(x.group)==nz(p.group)).map(x=>({b:x.brand||x.name,q:(sd[pk(x.name,x.part)]||{q:0}).q,a:(sd[pk(x.name,x.part)]||{ask:0}).ask,s:x.stock})).sort((a,b)=>b.q-a.q);
+  return al.length>1?`<div class="m">${al.map((x,i)=>`${i?'':'★ '}${e(x.b)}: sold ${x.q}${x.a?' (asked by name '+x.a+')':''}, stock ${e(x.s)}`).join(' · ')}</div>`:''};
+ return `<h1>Wanted</h1><div class="c"><label>Show items for supplier</label><input id="wsup" list="sl" value="${e(ws)}" placeholder="All suppliers" onchange="ws=this.value.trim();go('want')"><datalist id="sl">${sup().map(s=>`<option value="${e(s)}">`).join('')}</datalist>
+ ${ws&&!(set&&set.size)?'<div class="m">New supplier: showing everything. Ask which brands they supply.</div>':''}<button class="b s" onclick="supEdit()">Supplier brands</button></div>
+ <div class="c"><label>Add an item to Wanted</label><input id="wn" list="pl2"><datalist id="pl2">${D.Products.map(p=>`<option value="${e(p.name)}">`).join('')}</datalist><label>Quantity</label><input id="wq" type="number" value="1"><button class="b" onclick="addW()">Add</button></div>
+ ${rows.map((r,i)=>`<div class="c"><div class="r"><b>${e(r.item)}</b><b>${r.left}</b></div><div class="m">${e(r.part)} · ${e(r.brand||'no brand')} · ${e(r.why.join(', '))}</div>${bs(r)}<div class="g" style="margin-top:8px"><button class="b" onclick="ordW(${i})">Order</button>${r.why.includes('Added by you')?`<button class="b s" onclick="rmW(${i})">Remove</button>`:'<span></span>'}</div></div>`).join('')||'<div class="c m">Nothing wanted right now.</div>'}
+ <h2>Ordered</h2>${D.Orders.filter(o=>o.status=='ordered').map(o=>{const L=late(o);return `<div class="c" style="${L?'border-color:var(--bad)':''}"><div class="r"><b>${e(o.item)}</b><b class="${L?'dn':''}">${+o.qty-+o.got} pending</b></div><div class="m">${e(o.supplier)} · ordered ${e(o.date)} (${days(o.date)} days ago) · received ${e(o.got)} of ${e(o.qty)}</div>${L?`<div class="dn">Not received yet</div><div class="g"><button class="b s" onclick="ignO('${o.id}')">Ignore (next bill)</button><button class="b" onclick="reO('${o.id}')">Order from another supplier</button></div>`:`<button class="b s" onclick="reO('${o.id}')">Cancel order</button>`}</div>`}).join('')||'<div class="c m">No open orders.</div>'}`}
+function addW(){busy(async()=>{const n=$('#wn').value.trim();if(!n)throw new Error('Enter the item');const p=D.Products.find(x=>nz(x.name)==nz(n));
+ await add('Wanted',[['W'+Date.now(),ymd(new Date()),p?p.name:n,p?p.part:'',p?p.brand:'',+$('#wq').value||1]]);await load();go('want')})}
+function rmW(i){busy(async()=>{const r=WR[i],L=D.Wanted.filter(w=>pk(w.item,w.part)==r.k);if(L.length)await api(SH+sid+'/values:batchClear',{method:'POST',body:JSON.stringify({ranges:L.map(w=>`Wanted!A${w._r}:F${w._r}`)})});await load();go('want')})}
+function ordW(i){const r=WR[i];$('#dlg').innerHTML=`<h2>Order ${e(r.item)}</h2><div class="m">Wanted ${r.left}</div><label>Supplier</label><input id="os" list="sl2" value="${e(ws)}"><datalist id="sl2">${sup().map(s=>`<option value="${e(s)}">`).join('')}</datalist><label>Quantity to order from this supplier</label><input id="oq" type="number" value="${r.left}"><div class="m">Need 10 split 5 and 5? Order 5 here, then order the rest from another supplier.</div><div class="r"><button class="b s" onclick="dlg.close()">Cancel</button><button class="b" onclick="saveO(${i})">Place order</button></div>`;$('#dlg').showModal()}
+function saveO(i){busy(async()=>{const r=WR[i],s=$('#os').value.trim(),q=+$('#oq').value;if(!s||!q)throw new Error('Enter supplier and quantity');
+ await add('Orders',[['O'+Date.now(),ymd(new Date()),s,r.item,r.part,r.brand,q,0,'ordered','']]);
+ if(!D.Suppliers.some(x=>nz(x.name)==nz(s)))await add('Suppliers',[['S'+Date.now(),s,'','']]);
+ $('#dlg').close();await load();go('want')})}
+const putc=(r,v)=>api(SH+sid+`/values/${r}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[[v]]})});
+function ignO(id){busy(async()=>{const o=D.Orders.find(x=>x.id==id);await putc('Orders!J'+o._r,'1');await load();go('want')})}
+function reO(id){busy(async()=>{const o=D.Orders.find(x=>x.id==id),left=+o.qty-+o.got;await putc('Orders!I'+o._r,'cancelled');if(left>0)await add('Wanted',[['W'+Date.now(),ymd(new Date()),o.item,o.part,o.brand,left]]);await load();go('want')})}
+function supEdit(){$('#dlg').innerHTML=`<h2>Supplier brands</h2><label>Supplier</label><input id="sn" list="sl3" value="${e(ws)}" onchange="sbf()"><datalist id="sl3">${sup().map(s=>`<option value="${e(s)}">`).join('')}</datalist><label>Brands they supply (comma separated)</label><input id="sbr" placeholder="Hero, Honda"><div class="m">Brands are also learned from your purchase history.</div><div class="r"><button class="b s" onclick="dlg.close()">Cancel</button><button class="b" onclick="saveSup()">Save</button></div>`;$('#dlg').showModal();sbf()}
+function sbf(){const x=D.Suppliers.find(v=>nz(v.name)==nz($('#sn').value));$('#sbr').value=x?x.brands:''}
+function saveSup(){busy(async()=>{const n=$('#sn').value.trim();if(!n)throw new Error('Enter the supplier');const x=D.Suppliers.find(v=>nz(v.name)==nz(n)),b=$('#sbr').value;
+ if(x)await putc('Suppliers!D'+x._r,b);else await add('Suppliers',[['S'+Date.now(),n,'',b]]);$('#dlg').close();await load();go('want')})}
+async function recv(items,supn){const s=nz(supn),up=[],cl=[];
+ items.forEach(c=>{let q=+c.qty;const k=pk(c.name,c.part);
+  D.Orders.filter(o=>o.status=='ordered'&&nz(o.supplier)==s&&pk(o.item,o.part)==k).forEach(o=>{if(q<=0)return;const t=Math.min(+o.qty-+o.got,q);q-=t;const g=+o.got+t;up.push({range:'Orders!H'+o._r,values:[[g]]},{range:'Orders!I'+o._r,values:[[g>=+o.qty?'received':'ordered']]})});
+  if(+c.qty>0){D.Wanted.filter(w=>pk(w.item,w.part)==k).forEach(w=>cl.push(`Wanted!A${w._r}:F${w._r}`));D.Enquiries.filter(w=>pk(w.item,w.part)==k).forEach(w=>cl.push(`Enquiries!A${w._r}:H${w._r}`))}});
+ if(up.length)await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:up})});
+ if(cl.length)await api(SH+sid+'/values:batchClear',{method:'POST',body:JSON.stringify({ranges:cl})})}
+function enq(){const pre=enqPre;enqPre='';const c={};D.Enquiries.filter(x=>days(x.date)<=30).forEach(x=>{const k=pk(x.item,x.part);c[k]=c[k]||{n:0,x};c[k].n++});
+ return `<h1>Enquiries</h1><div class="c"><label>Item asked for</label><input id="en" list="pl" value="${e(pre)}"><datalist id="pl">${D.Products.map(p=>`<option value="${e(p.name)}">`).join('')}</datalist><label>Brand (optional)</label><input id="eb"><label>Customer (optional)</label><input id="ec"><label>Phone (optional)</label><input id="ep" type="tel"><button class="b" onclick="saveE()">Save enquiry</button></div>
+ <h2>Last 30 days</h2><div class="c">${Object.values(c).sort((a,b)=>b.n-a.n).map(o=>`<div class="it r"><span>${e(o.x.item)}</span><b>${o.n}${o.n>=(+S.enqThr||3)?' · in Wanted':''}</b></div>`).join('')||'<div class="m">No enquiries yet.</div>'}</div>`}
+function saveE(){busy(async()=>{const n=$('#en').value.trim();if(!n)throw new Error('Enter the item');const p=D.Products.find(x=>nz(x.name)==nz(n));
+ await add('Enquiries',[['E'+Date.now(),ymd(new Date()),p?p.name:n,p?p.part:'',$('#eb').value||(p?p.brand:''),$('#ec').value,$('#ep').value,p?p.id:'']]);await load();go('enq')})}
+/* SETTINGS */
+const SF=[['shop','Shop name'],['addr','Address'],['phone','Phone'],['gstin','GSTIN'],['prefix','Invoice prefix (example INV-)'],['enqThr','Enquiries before an item goes to Wanted (default 3)'],['lateDays','Days before an order turns red (default 3)']];
+function set(){return `<h1>Settings</h1><div class="c">`+SF.map(([k,l])=>`<label>${l}</label><input id="s_${k}" value="${e(S[k])}">`).join('')+
+ `<label>Terms and conditions</label><textarea id="s_terms" rows="4">${e(S.terms)}</textarea>
+ <label>Logo</label>${S.logo?`<img class="p" src="${S.logo}">`:''}<input type="file" accept="image/*" onchange="up(this,'logo',240)">
+ <label>Signature</label>${S.sign?`<img class="p" src="${S.sign}">`:''}<input type="file" accept="image/*" onchange="up(this,'sign',300)">
+ <button class="b" onclick="saveSet()">Save settings</button></div><div class="c"><b>App PIN</b><div class="m">${localStorage.pinh?'PIN is on for this phone.':'No PIN set.'}</div><label>New 4-digit PIN</label><input id="np" type="password" inputmode="numeric" maxlength="4"><button class="b" onclick="setPin()">Save PIN</button>${localStorage.pinh?`<button class="b s" style="margin-left:8px" onclick="localStorage.removeItem('pinh');go('set')">Remove PIN</button>`:''}</div><button class="b s" onclick="localStorage.removeItem('sid');location.reload()">Sign out</button>`}
+function up(el,k,max){const f=el.files[0];if(!f)return;const i=new Image();i.onload=()=>{const s=Math.min(1,max/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;
+ const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(i,0,0,c.width,c.height);S[k]=c.toDataURL('image/jpeg',.7);go('set')};i.src=URL.createObjectURL(f)}
+function saveSet(){busy(async()=>{SF.forEach(([k])=>S[k]=$('#s_'+k).value.trim());S.terms=$('#s_terms').value;await saveS();alert('Saved')})}
+async function hp(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('bill'+s));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+function lockUI(){if(!localStorage.pinh)return;$('#lk').hidden=false;$('#pi').value='';$('#pe').textContent=''}
+async function tryPin(){if(await hp($('#pi').value)==localStorage.pinh){$('#lk').hidden=true;$('#pi').value=''}else{$('#pe').textContent='Wrong PIN';$('#pi').value=''}}
+async function setPin(){const v=$('#np').value;if(!/^\d{4}$/.test(v))return alert('Enter exactly 4 digits');localStorage.pinh=await hp(v);alert('PIN saved on this phone');go('set')}
+let hid=0;document.addEventListener('visibilitychange',()=>{if(document.hidden)hid=Date.now();else if(hid&&Date.now()-hid>60000)lockUI()});
+lockUI();
+</script></body></html>
