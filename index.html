@@ -26,7 +26,7 @@ label{font-size:14px;color:var(--mut)}
 #nv button.on{color:var(--ink);box-shadow:inset 0 3px var(--ac)}
 dialog{width:min(92vw,520px);border:1px solid var(--ln);border-radius:12px;background:var(--card);color:var(--ink);max-height:90vh}
 img.p{max-height:50px;display:block;margin:4px 0}
-[hidden]{display:none!important}</style></head><body>
+[hidden]{display:none!important}.th{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--ln);flex:none}</style></head><body>
 <div id="lk" hidden style="position:fixed;inset:0;background:var(--bg);z-index:99;padding:20vh 20px 0;text-align:center"><h1>Enter PIN</h1><input id="pi" type="password" inputmode="numeric" maxlength="4" autocomplete="off" style="max-width:240px;text-align:center;font-size:28px" oninput="if(this.value.length==4)tryPin()"><div id="pe" class="dn"></div></div><div id="lg"><h1>Billing</h1><p class="m">Sign in with Google. Your data is saved in a Google Sheet in your own Drive.</p><button class="b" onclick="login()">Sign in with Google</button><p id="er" class="dn"></p></div>
 <main id="v" hidden></main>
 <nav id="nv" hidden></nav>
@@ -37,7 +37,7 @@ const $=s=>document.querySelector(s),e=s=>String(s??'').replace(/[&<>"]/g,c=>'&#
 R=n=>'₹'+(+n||0).toLocaleString('en-IN',{maximumFractionDigits:2}),
 nz=s=>String(s).toLowerCase().replace(/[^a-z0-9\u0b80-\u0bff]/g,''),
 ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-const H={Settings:['key','value'],Products:['id','name','part','alt','hsn','price','cost','gst','stock','rack','cupboard','box','brand','group','maxdisc','minstock'],Invoices:['no','date','cust','phone','sub','cgst','sgst','total','disc'],InvoiceItems:['no','name','part','hsn','qty','rate','gst','amount','disc','brand','ask'],Purchases:['id','date','supplier','bill','sub','gst','total'],PurchaseItems:['pid','name','part','qty','cost','gst','amount'],Expenses:['id','date','cat','amount','note'],Suppliers:['id','name','phone','brands'],Wanted:['id','date','item','part','brand','qty'],Orders:['id','date','supplier','item','part','brand','qty','got','status','ignore'],Enquiries:['id','date','item','part','brand','customer','phone','pid']};
+const H={Settings:['key','value'],Products:['id','name','part','alt','hsn','price','cost','gst','stock','rack','cupboard','box','brand','group','maxdisc','minstock','photo'],Invoices:['no','date','cust','phone','sub','cgst','sgst','total','disc'],InvoiceItems:['no','name','part','hsn','qty','rate','gst','amount','disc','brand','ask'],Purchases:['id','date','supplier','bill','sub','gst','total','round','file'],PurchaseItems:['pid','name','part','qty','cost','gst','amount'],Expenses:['id','date','cat','amount','note'],Suppliers:['id','name','phone','brands'],Wanted:['id','date','item','part','brand','qty'],Orders:['id','date','supplier','item','part','brand','qty','got','status','ignore'],Enquiries:['id','date','item','part','brand','customer','phone','pid']};
 const PF=[['name','Name used in shop'],['part','Part number'],['alt','Other names (comma separated)'],['hsn','HSN code'],['price','Selling price'],['cost','Purchase price'],['gst','GST %'],['stock','Stock'],['rack','Rack'],['cupboard','Cupboard'],['box','Box'],['brand','Brand (Hero, Honda, TVS, Fiam, Swiss...)'],['group','Same-part group (example: splendor side mirror)'],['maxdisc','Max discount % allowed (blank = no limit)'],['minstock','Minimum stock (below this goes to Wanted)']];
 let tc,tok,sid,S={},D={Products:[],Invoices:[],InvoiceItems:[],Purchases:[],PurchaseItems:[],Expenses:[],Suppliers:[],Wanted:[],Orders:[],Enquiries:[]},cart=[],pc2=[],tab='home',iq='',eno='',eo=[],ws='',enqPre='',bd='';
 function gl(){tc=google.accounts.oauth2.initTokenClient({client_id:CID,scope:'https://www.googleapis.com/auth/drive.file',callback:()=>{}})}
@@ -49,7 +49,7 @@ const busy=async f=>{document.body.style.opacity=.5;try{await f()}catch(x){alert
 async function login(){try{await auth('');await boot()}catch(x){$('#er').textContent=x.message}}
 async function ensureTabs(){
  const m=await api(SH+sid+'?fields=sheets.properties.title'),have=m.sheets.map(s=>s.properties.title),need=Object.keys(H).filter(k=>!have.includes(k));
- await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:['Products','Invoices','InvoiceItems'].filter(k=>have.includes(k)).map(k=>({range:k+'!A1',values:[H[k]]}))})});if(!need.length)return;
+ await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:['Products','Invoices','InvoiceItems','Purchases'].filter(k=>have.includes(k)).map(k=>({range:k+'!A1',values:[H[k]]}))})});if(!need.length)return;
  await api(SH+sid+':batchUpdate',{method:'POST',body:JSON.stringify({requests:need.map(k=>({addSheet:{properties:{title:k}}}))})});
  await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:need.map(k=>({range:k+'!A1',values:[H[k]]}))})})}
 async function boot(){
@@ -92,20 +92,20 @@ function items(){return `<div class="r"><h1>Items</h1><button class="b" onclick=
  <input id="iq" placeholder="Search by part number or any name" value="${e(iq)}" oninput="iq=this.value;il()"><div id="il"></div>`}
 const fp=q=>{const tk=String(q).toLowerCase().split(/\s+/).map(nz).filter(Boolean);return tk.length?D.Products.filter(p=>{const h=nz([p.name,p.part,p.brand,p.group,p.alt].join(' '));return tk.every(x=>h.includes(x))}):D.Products};
 const loc=p=>[p.rack&&'Rack '+p.rack,p.cupboard&&'Cupboard '+p.cupboard,p.box&&'Box '+p.box].filter(Boolean).join(' · ');
-function il(){$('#il').innerHTML=fp(iq).slice(0,60).map(p=>`<div class="c" onclick="editP('${p.id}')"><div class="r"><b>${e(p.name)}</b><span>${R(p.price)}</span></div><div class="m">${e(p.brand)} ${e(p.part)} · Stock ${e(p.stock)}</div><div class="m">${e(loc(p))}</div></div>`).join('')||'<div class="m">No items found.</div>'}
+function il(){$('#il').innerHTML=fp(iq).slice(0,60).map(p=>`<div class="c r" style="align-items:flex-start;justify-content:flex-start" onclick="editP('${p.id}')">${ph(p)}<div style="flex:1"><div class="r"><b>${e(p.name)}</b><span>${R(p.price)}</span></div><div class="m">${e(p.brand)} ${e(p.part)} · Stock ${e(p.stock)}</div><div class="m">${e(loc(p))}</div></div></div>`).join('')||'<div class="m">No items found.</div>'}
 function editP(id){const p=D.Products.find(x=>x.id==id)||{};
- $('#dlg').innerHTML=`<h2>${id?'Edit item':'New item'}</h2>`+PF.map(([k,l])=>`<label>${l}</label><input id="f_${k}" value="${e(p[k])}">`).join('')+`<div class="r"><button class="b s" onclick="dlg.close()">Cancel</button><button class="b" onclick="saveP('${id||''}')">Save item</button></div>${id?`<button class="b s" style="width:100%;margin-top:10px;color:var(--bad)" onclick="delP('${id}')">Delete item</button>`:''}`;
+ $('#dlg').innerHTML=`<h2>${id?'Edit item':'New item'}</h2>`+PF.map(([k,l])=>`<label>${l}</label><input id="f_${k}" value="${e(p[k])}">`).join('')+`<label>Photo of the item (shown in search, never printed on the bill)</label>${p.photo?`<img class="th" style="width:120px;height:120px" src="https://drive.google.com/thumbnail?id=${e(p.photo)}&sz=w300"><br>`:''}<input id="f_photo" type="file" accept="image/*"><div class="r"><button class="b s" onclick="dlg.close()">Cancel</button><button class="b" onclick="saveP('${id||''}')">Save item</button></div>${id?`<button class="b s" style="width:100%;margin-top:10px;color:var(--bad)" onclick="delP('${id}')">Delete item</button>`:''}`;
  $('#dlg').showModal()}
 function saveP(id){busy(async()=>{const v=PF.map(([k])=>$('#f_'+k).value.trim());if(!v[0])throw new Error('Enter the item name');
- const p=D.Products.find(x=>x.id==id),row=[p?p.id:String(Date.now()),...v];
- if(p)await api(SH+sid+`/values/Products!A${p._r}:P${p._r}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[row]})});else await add('Products',[row]);
+ const p=D.Products.find(x=>x.id==id),row0=0;let ph=p?p.photo||'':'';{const pf=$('#f_photo').files[0];if(pf)ph=(await drv(await shrink(pf,800,.75),'item-'+v[0]+'.jpg',true)).id}const row=[p?p.id:String(Date.now()),...v,ph];
+ if(p)await api(SH+sid+`/values/Products!A${p._r}:Q${p._r}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[row]})});else await add('Products',[row]);
  await load();$('#dlg').close();go('items');il()})}
-function delP(id){const p=D.Products.find(x=>x.id==id);if(!p||!confirm('Delete '+p.name+'?'))return;busy(async()=>{await api(SH+sid+`/values/Products!A${p._r}:P${p._r}:clear`,{method:'POST'});$('#dlg').close();await load();go('items')})}
+function delP(id){const p=D.Products.find(x=>x.id==id);if(!p||!confirm('Delete '+p.name+'?'))return;busy(async()=>{await api(SH+sid+`/values/Products!A${p._r}:Q${p._r}:clear`,{method:'POST'});$('#dlg').close();await load();go('items')})}
 /* BILL */
 function bill(){const i=D.Invoices.find(v=>v.no==eno)||{};return `<h1>${eno?'Edit '+e(eno):'New bill'}</h1><div class="c"><label>Customer name</label><input id="cn" value="${e(i.cust)}"><label>Phone</label><input id="cp" type="tel" value="${e(i.phone)}">
  <label>Add item (part number, brand or any name)</label><input id="bq" oninput="rs()"><div id="res"></div></div><div id="ct"></div>`}
 function rs(){const v=$('#bq').value,l=v?fp(v).slice(0,6):[];
- $('#res').innerHTML=l.map(p=>`<div class="it r" onclick="addC('${p.id}')"><div>${e(p.name)}<div class="m">${e(p.brand)} · ${e(p.part)} · ${e(loc(p))}</div></div><div class="m">Stock ${e(p.stock)}<br>${R(p.price)}</div></div>`).join('')+(v&&!l.length?`<button class="b s" onclick="enqPre=$('#bq').value;go('enq')">Not found. Log enquiry for "${e(v)}"</button>`:'')}
+ $('#res').innerHTML=l.map(p=>`<div class="it r" onclick="addC('${p.id}')">${ph(p)}<div style="flex:1">${e(p.name)}<div class="m">${e(p.brand)} · ${e(p.part)} · ${e(loc(p))}</div></div><div class="m">Stock ${e(p.stock)}<br>${R(p.price)}</div></div>`).join('')+(v&&!l.length?`<button class="b s" onclick="enqPre=$('#bq').value;go('enq')">Not found. Log enquiry for "${e(v)}"</button>`:'')}
 function addC(id){const p=D.Products.find(x=>x.id==id),c=cart.find(x=>x.id==id),q=$('#bq').value;
  if(c)c.qty++;else cart.push({id,r:p._r,name:p.name,part:p.part,hsn:p.hsn,qty:1,rate:+p.price,gst:+p.gst,stock:+p.stock,maxd:+p.maxdisc||0,brand:p.brand||'',ask:(p.brand&&nz(q).includes(nz(p.brand)))?'B':'',dt:''});
  $('#bq').value='';$('#res').innerHTML='';rc()}
@@ -185,27 +185,47 @@ async function shareImg(no){const c=await mkImg(no),b=await new Promise(r=>c.toB
  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=no+'.jpg';a.click()}
 
 /* PURCHASE */
-function buy(){return `<h1>Purchase entry</h1><div class="c"><label>Supplier</label><input id="su"><label>Supplier bill number</label><input id="sb"><label>Date</label><input id="sd" type="date" value="${ymd(new Date())}">
- <label>Add item (part number or any name)</label><input id="pq" oninput="rb()"><div id="pres"></div></div><div id="pct"></div>
- <h2>Recent purchases</h2><div class="c">${D.Purchases.slice(-10).reverse().map(x=>`<div class="it r" onclick="openP('${x.id}')"><div>${e(x.supplier)} · ${e(x.bill)}<div class="m">${e(x.date)} · ${R(x.total)}</div></div><span class="m">Open</span></div>`).join('')||'<div class="m">No purchases yet.</div>'}</div>`}
-function rb(){const q=$('#pq');if(q){const l=q.value?fp(q.value).slice(0,6):[];$('#pres').innerHTML=l.map(p=>`<div class="it r" onclick="addPC('${p.id}')"><div>${e(p.name)}<div class="m">${e(p.part)}</div></div><div class="m">Stock ${e(p.stock)}<br>Cost ${R(p.cost)}</div></div>`).join('')}
- const t=ptot();$('#pct').innerHTML=pc2.length?`<div class="c">${pc2.map((c,i)=>`<div class="it"><div class="r"><b>${e(c.name)}</b><button class="b s" onclick="pc2.splice(${i},1);rb()">✕</button></div>
- <div class="g"><div><label>Qty received</label><input type="number" value="${c.qty}" onchange="pc2[${i}].qty=+this.value;rb()"></div><div><label>Cost (before GST)</label><input type="number" value="${c.cost}" onchange="pc2[${i}].cost=+this.value;rb()"></div></div>
- <label>GST %</label><input type="number" value="${c.gst}" onchange="pc2[${i}].gst=+this.value;rb()"></div>`).join('')}
- <div class="r it"><span>Subtotal</span><span>${R(t.sub)}</span></div><div class="r"><span>GST paid</span><span>${R(t.gst)}</span></div><div class="r it"><b>Total</b><span class="big">${R(t.sub+t.gst)}</span></div></div>
+const ph=p=>p.photo?`<img class="th" loading="lazy" src="https://drive.google.com/thumbnail?id=${e(p.photo)}&sz=w160" onclick="event.stopPropagation();zoom('${e(p.photo)}')">`:'';
+function zoom(id){$('#dlg').innerHTML=`<img src="https://drive.google.com/thumbnail?id=${e(id)}&sz=w900" style="width:100%;border-radius:8px"><button class="b s" style="margin-top:10px" onclick="dlg.close()">Close</button>`;$('#dlg').showModal()}
+const shrink=(f,max,q)=>new Promise((ok,no)=>{const i=new Image();i.onload=()=>{const s=Math.min(1,max/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(i,0,0,c.width,c.height);c.toBlob(ok,'image/jpeg',q)};i.onerror=()=>no(new Error('Could not read the image'));i.src=URL.createObjectURL(f)});
+async function drv(blob,name,pub,t=1){const mt=blob.type||'application/octet-stream',bd='bb'+Date.now(),pre=`--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({name,mimeType:mt})}\r\n--${bd}\r\nContent-Type: ${mt}\r\n\r\n`;
+ const r=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',{method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'multipart/related; boundary='+bd},body:new Blob([pre,blob,`\r\n--${bd}--`])});
+ if(r.status==401&&t){await auth('');return drv(blob,name,pub,0)}
+ if(!r.ok)throw new Error((await r.text()).slice(0,200));const f=await r.json();
+ if(pub)await api('https://www.googleapis.com/drive/v3/files/'+f.id+'/permissions',{method:'POST',body:JSON.stringify({role:'reader',type:'anyone'})});return f}
+let pbt='';
+function buy(){return `<h1>Purchase entry</h1><div class="c"><label>Supplier</label><input id="su" list="sl4"><datalist id="sl4">${sup().map(s=>`<option value="${e(s)}">`).join('')}</datalist><label>Supplier bill number</label><input id="sb"><label>Date</label><input id="sd" type="date" value="${ymd(new Date())}">
+ <label>Add item (part number, brand or any name)</label><input id="pq" oninput="rb()"><div id="pres"></div></div><div id="pct"></div>
+ <h2>Recent purchases</h2><div class="c">${D.Purchases.slice(-10).reverse().map(x=>`<div class="it r" onclick="openP('${x.id}')"><div>${e(x.supplier)} · ${e(x.bill)}<div class="m">${e(x.date)} · ${R(x.total)}${x.file?' · bill saved':''}</div></div><span class="m">Open</span></div>`).join('')||'<div class="m">No purchases yet.</div>'}</div>`}
+function rb(){const q=$('#pq');if(q){const v=q.value,l=v?fp(v).slice(0,6):[];
+  $('#pres').innerHTML=l.map(p=>`<div class="it r" onclick="addPC('${p.id}')">${ph(p)}<div style="flex:1">${e(p.name)}<div class="m">${e(p.brand)} ${e(p.part)}</div></div><div class="m">Stock ${e(p.stock)}<br>Cost ${R(p.cost)}</div></div>`).join('')+(v?`<button class="b s" style="margin-top:8px" onclick="newItem($('#pq').value)">Not listed? Add new item "${e(v)}"</button>`:'')}
+ const t=ptot(),rd=pbt!==''?+pbt-(t.sub+t.gst):0;
+ $('#pct').innerHTML=pc2.length?`<div class="c">${pc2.map((c,i)=>`<div class="it"><div class="r"><b>${e(c.name)}</b><button class="b s" onclick="pc2.splice(${i},1);rb()">✕</button></div>
+ <div class="g"><div><label>Qty received</label><input type="number" value="${c.qty}" onchange="pc2[${i}].qty=+this.value;pc2[${i}].amt=Math.round(pc2[${i}].cost*pc2[${i}].qty*100)/100;rb()"></div><div><label>GST %</label><input type="number" value="${c.gst}" onchange="pc2[${i}].gst=+this.value;rb()"></div></div>
+ <div class="g"><div><label>Taxable amount (from bill)</label><input type="number" step="any" value="${c.amt}" onchange="pc2[${i}].amt=+this.value;pc2[${i}].cost=pc2[${i}].qty?pc2[${i}].amt/pc2[${i}].qty:0;rb()"></div><div><label>Cost per piece</label><input type="number" step="any" value="${+(+c.cost).toFixed(4)}" onchange="pc2[${i}].cost=+this.value;pc2[${i}].amt=Math.round(pc2[${i}].cost*pc2[${i}].qty*100)/100;rb()"></div></div></div>`).join('')}
+ <div class="r it"><span>Taxable value</span><span>${R(t.sub)}</span></div><div class="r"><span>GST paid</span><span>${R(t.gst)}</span></div>
+ <label>Bill total as printed by supplier (optional, sets the round off)</label><input id="bt" type="number" step="any" value="${e(pbt)}" oninput="rr()" placeholder="example 4800">
+ <div class="r"><span>Round off</span><span id="ro">${R(rd)}</span></div><div class="r it"><b>Total</b><span class="big" id="gt">${R(pbt!==''?+pbt:t.sub+t.gst)}</span></div>
+ <label>Supplier bill (photo or PDF, optional)</label><input id="bf" type="file" accept="image/*,application/pdf"></div>
  <button class="b" style="width:100%" onclick="saveP2()">Save purchase and add stock</button>`:''}
-function addPC(id){const p=D.Products.find(x=>x.id==id),c=pc2.find(x=>x.id==id);if(c)c.qty++;else pc2.push({id,r:p._r,name:p.name,part:p.part,qty:1,cost:+p.cost||0,gst:+p.gst||0,stock:+p.stock||0});$('#pq').value='';$('#pres').innerHTML='';rb()}
-const ptot=()=>{let sub=0,gst=0;pc2.forEach(c=>{const a=c.qty*c.cost;sub+=a;gst+=a*c.gst/100});return{sub,gst}};
-function saveP2(){busy(async()=>{if(!pc2.length)throw new Error('Add items first');const t=ptot(),id='P'+Date.now(),dt=$('#sd').value||ymd(new Date());
- await add('Purchases',[[id,dt,$('#su').value||'Supplier',$('#sb').value,t.sub.toFixed(2),t.gst.toFixed(2),(t.sub+t.gst).toFixed(2)]]);
- await add('PurchaseItems',pc2.map(c=>[id,c.name,c.part,c.qty,c.cost,c.gst,(c.qty*c.cost).toFixed(2)]));
- await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:pc2.flatMap(c=>[{range:'Products!I'+c.r,values:[[c.stock+c.qty]]},{range:'Products!G'+c.r,values:[[c.cost]]}])})});
- await recv(pc2,$('#su').value);pc2=[];await load();go('buy')})}
-function openP(id){const x=D.Purchases.find(v=>v.id==id);$('#dlg').innerHTML=`<h2>${e(x.supplier)}</h2><div class="m">${e(x.bill)} · ${e(x.date)} · ${R(x.total)}</div>${D.PurchaseItems.filter(i=>i.pid==id).map(i=>`<div class="it">${e(i.name)} · ${e(i.qty)} x ${e(i.cost)}</div>`).join('')}<div class="g" style="margin-top:12px"><button class="b s" style="color:var(--bad)" onclick="delPur('${id}')">Delete</button><button class="b s" onclick="dlg.close()">Close</button></div>`;$('#dlg').showModal()}
+function rr(){pbt=$('#bt').value;const t=ptot();$('#ro').textContent=R(pbt!==''?+pbt-(t.sub+t.gst):0);$('#gt').textContent=R(pbt!==''?+pbt:t.sub+t.gst)}
+function addPC(id){const p=D.Products.find(x=>x.id==id),c=pc2.find(x=>x.id==id);if(c){c.qty++;c.amt=Math.round(c.cost*c.qty*100)/100}else pc2.push({id,r:p._r,name:p.name,part:p.part,qty:1,cost:+p.cost||0,gst:+p.gst||0,stock:+p.stock||0,amt:+p.cost||0});$('#pq').value='';$('#pres').innerHTML='';rb()}
+const ptot=()=>{let sub=0,gst=0;pc2.forEach(c=>{const a=+c.amt||0;sub+=a;gst+=Math.round(a*c.gst/200*100)/100*2});return{sub:Math.round(sub*100)/100,gst:Math.round(gst*100)/100}};
+function newItem(txt){$('#dlg').innerHTML=`<h2>New item</h2><label>Name used in shop</label><input id="n_name" value="${e(txt)}"><label>Part number</label><input id="n_part"><label>Brand</label><input id="n_brand"><label>HSN code</label><input id="n_hsn"><label>Selling price (MRP)</label><input id="n_price" type="number"><label>GST %</label><input id="n_gst" type="number"><label>Rack</label><input id="n_rack"><label>Cupboard</label><input id="n_cup"><label>Box</label><input id="n_box"><label>Photo (optional)</label><input id="n_photo" type="file" accept="image/*"><div class="r"><button class="b s" onclick="dlg.close()">Cancel</button><button class="b" onclick="saveNI()">Save and add to purchase</button></div>`;$('#dlg').showModal()}
+function saveNI(){busy(async()=>{const n=$('#n_name').value.trim();if(!n)throw new Error('Enter the item name');let pf='';const f=$('#n_photo').files[0];if(f)pf=(await drv(await shrink(f,800,.75),'item-'+n+'.jpg',true)).id;
+ const id='N'+Date.now();await add('Products',[[id,n,$('#n_part').value.trim(),'',$('#n_hsn').value.trim(),$('#n_price').value,0,$('#n_gst').value||0,0,$('#n_rack').value.trim(),$('#n_cup').value.trim(),$('#n_box').value.trim(),$('#n_brand').value.trim(),'','','',pf]]);
+ await load();$('#dlg').close();addPC(id)})}
+function saveP2(){busy(async()=>{if(!pc2.length)throw new Error('Add items first');const t=ptot(),id='P'+Date.now(),dt=$('#sd').value||ymd(new Date()),spl=$('#su').value||'Supplier',bn=$('#sb').value,tot=pbt!==''?+pbt:t.sub+t.gst,rd=tot-(t.sub+t.gst);
+ let link='';const f=$('#bf').files[0];if(f){const im=f.type.startsWith('image/'),bl=im?await shrink(f,1600,.8):f;link=(await drv(bl,`Bill-${spl}-${bn||'nobill'}-${dt}.${im?'jpg':(f.name.split('.').pop()||'pdf')}`,false)).webViewLink||''}
+ await add('Purchases',[[id,dt,spl,bn,t.sub.toFixed(2),t.gst.toFixed(2),tot.toFixed(2),rd.toFixed(2),link]]);
+ await add('PurchaseItems',pc2.map(c=>[id,c.name,c.part,c.qty,+(+c.cost).toFixed(4),c.gst,(+c.amt).toFixed(2)]));
+ await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:pc2.flatMap(c=>[{range:'Products!I'+c.r,values:[[c.stock+ +c.qty]]},{range:'Products!G'+c.r,values:[[+(+c.cost).toFixed(4)]]}])})});
+ await recv(pc2,spl);pc2=[];pbt='';await load();go('buy')})}
+function openP(id){const x=D.Purchases.find(v=>v.id==id);$('#dlg').innerHTML=`<h2>${e(x.supplier)}</h2><div class="m">${e(x.bill)} · ${e(x.date)} · ${R(x.total)}${+x.round?' (round off '+R(x.round)+')':''}</div>${D.PurchaseItems.filter(i=>i.pid==id).map(i=>`<div class="it">${e(i.name)} · ${e(i.qty)} x ${+(+i.cost).toFixed(4)} = ${R(i.amount)}</div>`).join('')}${x.file?`<a class="b s" style="display:block;text-align:center;margin-top:10px;text-decoration:none" href="${e(x.file)}" target="_blank">Open supplier bill</a>`:''}<div class="g" style="margin-top:12px"><button class="b s" style="color:var(--bad)" onclick="delPur('${id}')">Delete</button><button class="b s" onclick="dlg.close()">Close</button></div>`;$('#dlg').showModal()}
 function delPur(id){if(!confirm('Delete this purchase? Stock will be reduced back.'))return;busy(async()=>{const x=D.Purchases.find(v=>v.id==id),L=D.PurchaseItems.filter(i=>i.pid==id),d=[];
  L.forEach(i=>{const p=D.Products.find(z=>z.name==i.name&&z.part==i.part);if(p)d.push({range:'Products!I'+p._r,values:[[+p.stock-+i.qty]]})});
  if(d.length)await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:d})});
- await api(SH+sid+'/values:batchClear',{method:'POST',body:JSON.stringify({ranges:[`Purchases!A${x._r}:G${x._r}`,...L.map(i=>`PurchaseItems!A${i._r}:G${i._r}`)]})});
+ await api(SH+sid+'/values:batchClear',{method:'POST',body:JSON.stringify({ranges:[`Purchases!A${x._r}:I${x._r}`,...L.map(i=>`PurchaseItems!A${i._r}:G${i._r}`)]})});
  $('#dlg').close();await load();go('buy')})}
 /* EXPENSES */
 const EC=['Rent','Electricity','Salary','Petty cash','Pooja','Transport','Other'];
