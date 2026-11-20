@@ -16,7 +16,7 @@ h1,h2{margin:.2em 0 .5em;font-weight:700}
 .big{font-size:30px;font-weight:700}.m{color:var(--mut);font-size:14px}.up{color:var(--ok)}.dn{color:var(--bad)}
 .g{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .r{display:flex;gap:8px;align-items:center;justify-content:space-between}
-input,textarea{width:100%;padding:10px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin:3px 0 8px}
+input,textarea,select{width:100%;padding:10px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;margin:3px 0 8px}
 label{font-size:14px;color:var(--mut)}
 .b{background:var(--ac);color:#1c2a33;border:0;border-radius:8px;padding:11px 16px;font:700 16px inherit;font-family:inherit}
 .b.s{background:var(--bg);color:var(--ink);border:1px solid var(--ln)}
@@ -37,9 +37,9 @@ const $=s=>document.querySelector(s),e=s=>String(s??'').replace(/[&<>"]/g,c=>'&#
 R=n=>'₹'+(+n||0).toLocaleString('en-IN',{maximumFractionDigits:2}),
 nz=s=>String(s).toLowerCase().replace(/[^a-z0-9\u0b80-\u0bff]/g,''),
 ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-const H={Settings:['key','value'],Products:['id','name','part','alt','hsn','price','cost','gst','stock','rack','cupboard','box','brand','group','maxdisc','minstock','photo'],Invoices:['no','date','cust','phone','sub','cgst','sgst','total','disc'],InvoiceItems:['no','name','part','hsn','qty','rate','gst','amount','disc','brand','ask','prod'],Purchases:['id','date','supplier','bill','sub','gst','total','round','file'],PurchaseItems:['pid','name','part','qty','cost','gst','amount','prod'],Expenses:['id','date','cat','amount','note'],Suppliers:['id','name','phone','brands'],Wanted:['id','date','item','part','brand','qty'],Orders:['id','date','supplier','item','part','brand','qty','got','status','ignore'],Enquiries:['id','date','item','part','brand','customer','phone','pid']};
+const H={Settings:['key','value'],Products:['id','name','part','alt','hsn','price','cost','gst','stock','rack','cupboard','box','brand','group','maxdisc','minstock','photo'],Invoices:['no','date','cust','phone','sub','cgst','sgst','total','disc','type','incl'],InvoiceItems:['no','name','part','hsn','qty','rate','gst','amount','disc','brand','ask','prod'],Purchases:['id','date','supplier','bill','sub','gst','total','round','file'],PurchaseItems:['pid','name','part','qty','cost','gst','amount','prod'],Expenses:['id','date','cat','amount','note'],Suppliers:['id','name','phone','brands','gstin','address'],Wanted:['id','date','item','part','brand','qty'],Orders:['id','date','supplier','item','part','brand','qty','got','status','ignore'],Enquiries:['id','date','item','part','brand','customer','phone','pid']};
 const PF=[['name','Name used in shop'],['part','Part number'],['alt','Other names (comma separated)'],['hsn','HSN code'],['price','Selling price'],['cost','Purchase price'],['gst','GST %'],['stock','Stock'],['rack','Rack'],['cupboard','Cupboard'],['box','Box'],['brand','Brand (Hero, Honda, TVS, Fiam, Swiss...)'],['group','Same-part group (example: splendor side mirror)'],['maxdisc','Max discount % allowed (blank = no limit)'],['minstock','Minimum stock (below this goes to Wanted)']];
-let tc,tok,sid,S={},D={Products:[],Invoices:[],InvoiceItems:[],Purchases:[],PurchaseItems:[],Expenses:[],Suppliers:[],Wanted:[],Orders:[],Enquiries:[]},cart=[],pc2=[],tab='home',iq='',eno='',eo=[],ws='',enqPre='',bd='';
+let tc,tok,sid,S={},D={Products:[],Invoices:[],InvoiceItems:[],Purchases:[],PurchaseItems:[],Expenses:[],Suppliers:[],Wanted:[],Orders:[],Enquiries:[]},cart=[],pc2=[],tab='home',iq='',eno='',eo=[],ws='',enqPre='',bd='',btype='G',bincl=null,bcn='',bcp='';
 function gl(){tc=google.accounts.oauth2.initTokenClient({client_id:CID,scope:'https://www.googleapis.com/auth/drive.file',callback:()=>{}})}
 function auth(p){return new Promise((ok,no)=>{tc.callback=r=>r.access_token?(tok=r.access_token,ok()):no(new Error(r.error||'Login failed'));tc.requestAccessToken({prompt:p})})}
 async function api(u,o={},t=1){const r=await fetch(u,{...o,headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'}});
@@ -49,7 +49,7 @@ let bzy=false;const busy=async f=>{if(bzy)return;bzy=true;$('#bz').hidden=false;
 async function login(){try{await auth('');await boot()}catch(x){$('#er').textContent=x.message}}
 async function ensureTabs(){
  const m=await api(SH+sid+'?fields=sheets.properties.title'),have=m.sheets.map(s=>s.properties.title),need=Object.keys(H).filter(k=>!have.includes(k));
- await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:['Products','Invoices','InvoiceItems','Purchases','PurchaseItems'].filter(k=>have.includes(k)).map(k=>({range:k+'!A1',values:[H[k]]}))})});if(!need.length)return;
+ await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:['Products','Invoices','InvoiceItems','Purchases','PurchaseItems','Suppliers'].filter(k=>have.includes(k)).map(k=>({range:k+'!A1',values:[H[k]]}))})});if(!need.length)return;
  await api(SH+sid+':batchUpdate',{method:'POST',body:JSON.stringify({requests:need.map(k=>({addSheet:{properties:{title:k}}}))})});
  await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:need.map(k=>({range:k+'!A1',values:[H[k]]}))})})}
 async function boot(){
@@ -73,7 +73,7 @@ const add=(t,rows)=>api(SH+sid+'/values/'+t+'!A1:append?valueInputOption=RAW&ins
 const saveS=async()=>{await api(SH+sid+'/values/Settings!A1:B60:clear',{method:'POST'});
  await api(SH+sid+'/values/Settings!A1?valueInputOption=RAW',{method:'PUT',body:JSON.stringify({values:[['key','value'],...Object.entries(S)]})})};
 function go(t){tab=t;document.querySelectorAll('#nv button').forEach(b=>b.classList.toggle('on',b.id=='n_'+t));
- if(t!='bill'&&eno){eno='';eo=[];cart=[]}if(t!='buy')pc2=[];$('#v').innerHTML={home,bill,items,buy,more,rep,exp,set,priv,want,enq}[t]();if(t=='bill')rc();if(t=='items')il();if(t=='buy')rb();if(t=='rep')drawRep()}
+ if(t!='bill'&&eno){eno='';eo=[];cart=[]}if(t!='buy')pc2=[];$('#v').innerHTML={home,bill,items,buy,more,rep,exp,set,priv,want,enq,sups}[t]();if(t=='bill')rc();if(t=='items')il();if(t=='buy')rb();if(t=='rep')drawRep()}
 /* HOME */
 function home(){
  const now=new Date(),cur=ymd(now).slice(0,7),im=gi(),m={};let td=0;
@@ -104,61 +104,69 @@ function delP(id){const p=D.Products.find(x=>x.id==id);if(!p)return;const m=o=>o
  if(!confirm('Delete '+p.name+'?'+(nb||np?'\n\nThis item is in '+nb+' bill(s) and '+np+' purchase(s). Those records stay, but if you delete or edit them later, the stock of this item cannot be corrected.':'')))return;
  busy(async()=>{await api(SH+sid+`/values/Products!A${p._r}:Q${p._r}:clear`,{method:'POST'});$('#dlg').close();await load();go('items')})}
 /* BILL */
-function bill(){const i=D.Invoices.find(v=>v.no==eno)||{};return `<h1>${eno?'Edit '+e(eno):'New bill'}</h1><div class="c"><label>Customer name</label><input id="cn" value="${e(i.cust)}"><label>Phone</label><input id="cp" type="tel" value="${e(i.phone)}">
+const incl=()=>bincl==null?['1','yes','y'].includes(String(S.incl||'').toLowerCase()):bincl,tm=p=>(+p.gst>0)==(btype=='G');
+function bill(){const i=D.Invoices.find(v=>v.no==eno)||{};return `<h1>${eno?'Edit '+e(eno):'New bill'}</h1><div class="c"><label>Bill type</label><select ${eno?'disabled':''} onchange="setType(this.value)"><option value="G" ${btype=='G'?'selected':''}>GST bill (tax invoice)</option><option value="N" ${btype=='N'?'selected':''}>Non-GST bill (bill of supply)</option></select>
+ ${btype=='G'?`<label style="display:block;margin:6px 0"><input type="checkbox" style="width:auto;margin:0 8px 0 0" ${incl()?'checked':''} onchange="bincl=this.checked;rc()">Prices include GST (MRP)</label>`:''}
+ <label>Customer name</label><input id="cn" value="${e(eno?i.cust:bcn)}" oninput="bcn=this.value"><label>Phone</label><input id="cp" type="tel" value="${e(eno?i.phone:bcp)}" oninput="bcp=this.value">
  <label>Add item (part number, brand or any name)</label><input id="bq" oninput="rs()"><div id="res"></div></div><div id="ct"></div>`}
-function rs(){const v=$('#bq').value,l=v?fp(v).slice(0,6):[];
- $('#res').innerHTML=l.map(p=>`<div class="it r" onclick="addC('${p.id}')">${ph(p)}<div style="flex:1">${e(p.name)}<div class="m">${e(p.brand)} · ${e(p.part)} · ${e(loc(p))}</div></div><div class="m">Stock ${e(p.stock)}<br>${R(p.price)}</div></div>`).join('')+(v&&!l.length?`<button class="b s" onclick="enqPre=$('#bq').value;go('enq')">Not found. Log enquiry for "${e(v)}"</button>`:'')}
-function addC(id){const p=D.Products.find(x=>x.id==id),c=cart.find(x=>x.id==id),q=$('#bq').value;
+function setType(v){const bad=cart.filter(c=>(+c.gst>0)!=(v=='G'));if(bad.length){if(!confirm(bad.length+' item(s) of the other type will be removed. Continue?')){go('bill');return}cart=cart.filter(c=>(+c.gst>0)==(v=='G'))}btype=v;go('bill')}
+function rs(){const v=$('#bq').value,all=v?fp(v):[],l=all.filter(tm).slice(0,6);
+ $('#res').innerHTML=l.map(p=>`<div class="it r" onclick="addC('${p.id}')">${ph(p)}<div style="flex:1">${e(p.name)}<div class="m">${e(p.brand)} · ${e(p.part)} · ${e(loc(p))}</div></div><div class="m">Stock ${e(p.stock)}<br>${R(p.price)}</div></div>`).join('')+(v&&!all.length?`<button class="b s" onclick="enqPre=$('#bq').value;go('enq')">Not found. Log enquiry for "${e(v)}"</button>`:'')+(v&&all.length&&!l.length?`<div class="dn">This item is ${btype=='G'?'Non-GST':'GST'}. Switch the bill type to add it.</div>`:'')}
+function addC(id){const p=D.Products.find(x=>x.id==id),c=cart.find(x=>x.id==id),q=$('#bq').value;if(!tm(p))return alert('This item does not match the bill type.');
  if(c)c.qty++;else cart.push({id,r:p._r,name:p.name,part:p.part,hsn:p.hsn,qty:1,rate:+p.price,gst:+p.gst,stock:+p.stock,maxd:+p.maxdisc||0,brand:p.brand||'',ask:(p.brand&&nz(q).includes(nz(p.brand)))?'B':'',dt:''});
  $('#bq').value='';$('#res').innerHTML='';rc()}
 function pd(s,b){s=String(s||'').trim();if(!s)return 0;return s.endsWith('%')?b*(parseFloat(s)||0)/100:(parseFloat(s)||0)}
-function calc(){const L=cart.map(c=>{const g=c.qty*c.rate;return{...c,gross:g,cap:c.maxd?g*c.maxd/100:g,disc:0,hit:false}}),G=L.reduce((s,x)=>s+x.gross,0),man=[],auto=[];
+function calc(){const inc=incl()&&btype=='G',L=cart.map(c=>{const g=c.qty*c.rate;return{...c,gross:g,cap:c.maxd?g*c.maxd/100:g,disc:0,hit:false}}),G=L.reduce((s,x)=>s+x.gross,0),man=[],auto=[];
  L.forEach(x=>{if(String(x.dt||'').trim()!==''){const w=pd(x.dt,x.gross);x.disc=Math.min(w,x.cap);x.hit=w>x.cap+.005;man.push(x)}else auto.push(x)});
  const M=man.reduce((s,x)=>s+x.disc,0),B=Math.min(pd(bd,G),L.reduce((s,x)=>s+x.cap,0));let rem=Math.max(0,B-M),act=auto.slice();
  for(let k=0;k<6&&rem>.005&&act.length;k++){const tg=act.reduce((s,x)=>s+x.gross,0)||1;let used=0;act.forEach(x=>{const s=Math.min(x.cap-x.disc,rem*x.gross/tg);x.disc+=s;used+=s});rem-=used;act=act.filter(x=>x.cap-x.disc>.005)}
- L.forEach(x=>{x.disc=Math.round(x.disc*100)/100;x.amt=x.gross-x.disc});
- const sub=L.reduce((s,x)=>s+x.amt,0),tax=L.reduce((s,x)=>s+x.amt*x.gst/100,0);return{L,sub,tax,disc:L.reduce((s,x)=>s+x.disc,0),total:Math.round(sub+tax),short:rem>.01}}
-function rc(){const t=calc();
+ L.forEach(x=>{x.disc=Math.round(x.disc*100)/100;x.line=x.gross-x.disc;x.g=btype=='G'?+x.gst:0;x.amt=inc&&x.g?x.line/(1+x.g/100):x.line;x.tx=inc?x.line-x.amt:x.amt*x.g/100});
+ const sub=L.reduce((s,x)=>s+x.amt,0),tax=L.reduce((s,x)=>s+x.tx,0);return{L,sub,tax,disc:L.reduce((s,x)=>s+x.disc,0),total:Math.round(sub+tax),short:rem>.01}}
+function rc(){const t=calc(),g=btype=='G';
  $('#ct').innerHTML=cart.length?`<div class="c">${t.L.map((c,i)=>`<div class="it"><div class="r"><b>${e(c.name)}</b><button class="b s" onclick="cart.splice(${i},1);rc()">✕</button></div>
  <div class="m">${e(c.brand)}${c.maxd?' · max discount '+c.maxd+'%':''}</div>
- <div class="g"><div><label>Qty</label><input type="number" value="${c.qty}" onchange="cart[${i}].qty=+this.value;rc()"></div><div><label>Rate (MRP, before GST)</label><input type="number" value="${c.rate}" onchange="cart[${i}].rate=+this.value;rc()"></div></div>
- <label>Discount on this item (₹ or %, example 50 or 10%)${c.disc>0?' = '+R(c.disc):''}${c.hit?' · limit reached':''}</label><input value="${e(cart[i].dt)}" placeholder="auto from bill discount" onchange="cart[${i}].dt=this.value.trim();rc()"><div class="m">GST ${c.gst}% · line total ${R(c.amt)}</div></div>`).join('')}
+ <div class="g"><div><label>Qty</label><input type="number" value="${c.qty}" onchange="cart[${i}].qty=+this.value;rc()"></div><div><label>Rate (${g&&incl()?'MRP, GST included':'before GST'})</label><input type="number" value="${c.rate}" onchange="cart[${i}].rate=+this.value;rc()"></div></div>
+ <label>Discount on this item (₹ or %, example 50 or 10%)${c.disc>0?' = '+R(c.disc):''}${c.hit?' · limit reached':''}</label><input value="${e(cart[i].dt)}" placeholder="auto from bill discount" onchange="cart[${i}].dt=this.value.trim();rc()"><div class="m">${g?'GST '+c.g+'% · ':''}line total ${R(c.line)}</div></div>`).join('')}
  <label>Bill discount (₹ or %, example 100 or 10%)</label><input value="${e(bd)}" onchange="bd=this.value.trim();rc()">${t.short?'<div class="dn">Item limits reached, bill discount not fully applied.</div>':''}
- <div class="r it"><span>Discount given</span><span>${R(t.disc)}</span></div><div class="r"><span>Taxable value</span><span>${R(t.sub)}</span></div><div class="r"><span>CGST</span><span>${R(t.tax/2)}</span></div><div class="r"><span>SGST</span><span>${R(t.tax/2)}</span></div>
- <div class="r it"><b>Total</b><span class="big">${R(t.total)}</span></div></div><button class="b" style="width:100%" onclick="saveB()">${eno?'Save changes':'Save bill'}</button>${eno?`<button class="b s" style="width:100%;margin-top:8px" onclick="eno='';eo=[];cart=[];bd='';go('home')">Cancel edit</button>`:''}`:''}
+ <div class="r it"><span>Discount given</span><span>${R(t.disc)}</span></div><div class="r"><span>${g?'Taxable value':'Sub total'}</span><span>${R(t.sub)}</span></div>${g?`<div class="r"><span>CGST</span><span>${R(t.tax/2)}</span></div><div class="r"><span>SGST</span><span>${R(t.tax/2)}</span></div>`:''}
+ <div class="r it"><b>Total</b><span class="big">${R(t.total)}</span></div></div><button class="b" style="width:100%" onclick="saveB()">${eno?'Save changes':'Save bill'}</button>${eno?`<button class="b s" style="width:100%;margin-top:8px" onclick="eno='';eo=[];cart=[];bd='';bincl=null;go('home')">Cancel edit</button>`:''}`:''}
+function nextNo(ty){const g=ty=='G',pre=g?(S.prefix||'INV-'):(S.prefixng||'NG-'),ex=new Set(D.Invoices.map(x=>x.no));
+ if(String(S.nummode||'').toLowerCase()=='date'){const b=pre+ymd(new Date()).replace(/-/g,'').slice(2)+'-';let n=1;while(ex.has(b+String(n).padStart(3,'0')))n++;return b+String(n).padStart(3,'0')}
+ let n=+(g?S.next:S.nextng)||1;const f=k=>pre+String(k).padStart(4,'0');while(ex.has(f(n)))n++;return f(n)}
 async function stk(a,b){const dl={};a.forEach(o=>{if(o.r)dl[o.r]=(dl[o.r]||0)+ +o.qty});b.forEach(c=>{if(c.r)dl[c.r]=(dl[c.r]||0)-c.qty});
  const d=Object.keys(dl).filter(r=>dl[r]&&D.Products.some(p=>p._r==r)).map(r=>({range:'Products!I'+r,values:[[+D.Products.find(p=>p._r==r).stock+dl[r]]]}));
  if(d.length)await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:d})})}
 const clr=L=>L.length?api(SH+sid+'/values:batchClear',{method:'POST',body:JSON.stringify({ranges:L.map(x=>`InvoiceItems!A${x._r}:L${x._r}`)})}):0;
-function saveB(){busy(async()=>{if(!cart.length)throw new Error('Add items first');await load();const t=calc(),cu=$('#cn').value||'Customer',ph=$('#cp').value,no=eno||(S.prefix||'INV-')+String(S.next).padStart(4,'0');let dt=ymd(new Date());
- const row=()=>[no,dt,cu,ph,t.sub.toFixed(2),(t.tax/2).toFixed(2),(t.tax/2).toFixed(2),t.total,t.disc.toFixed(2)];
+function saveB(){busy(async()=>{if(!cart.length)throw new Error('Add items first');await load();const t=calc(),cu=$('#cn').value||'Customer',ph=$('#cp').value,g=btype=='G',no=eno||nextNo(btype);let dt=ymd(new Date());
+ const row=()=>[no,dt,cu,ph,t.sub.toFixed(2),(t.tax/2).toFixed(2),(t.tax/2).toFixed(2),t.total,t.disc.toFixed(2),btype,incl()&&g?'1':''];
  if(eno){const i=D.Invoices.find(x=>x.no==eno);dt=i.date;
-  await api(SH+sid+`/values/Invoices!A${i._r}:I${i._r}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[row()]})});
+  await api(SH+sid+`/values/Invoices!A${i._r}:K${i._r}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[row()]})});
   await clr(D.InvoiceItems.filter(x=>x.no==eno))}
  else await add('Invoices',[row()]);
- await add('InvoiceItems',t.L.map(c=>[no,c.name,c.part,c.hsn,c.qty,c.rate,c.gst,c.amt.toFixed(2),c.disc.toFixed(2),c.brand||'',c.ask||'',c.id||'']));
+ await add('InvoiceItems',t.L.map(c=>[no,c.name,c.part,c.hsn,c.qty,c.rate,c.g,c.amt.toFixed(2),c.disc.toFixed(2),c.brand||'',c.ask||'',c.id||'']));
  await stk(eo,cart);
- if(!eno){S.next=String(+S.next+1);await saveS()}
- eno='';eo=[];cart=[];bd='';await load();go('home');openB(no)})}
+ if(!eno&&String(S.nummode||'').toLowerCase()!='date'){const m=no.match(/(\d+)$/);S[g?'next':'nextng']=String((+m[1])+1);await saveS()}
+ eno='';eo=[];cart=[];bd='';bincl=null;bcn='';bcp='';await load();go('home');openB(no)})}
 function openB(no){const i=D.Invoices.find(x=>x.no==no);
  $('#dlg').innerHTML=`<h2>${e(no)}</h2><div class="m">${e(i.cust)} · ${R(i.total)}</div><div class="g" style="margin:12px 0"><button class="b" onclick="share('${e(no)}')">PDF</button><button class="b" onclick="shareImg('${e(no)}')">Image (JPG)</button><button class="b s" onclick="dlg.close();editB('${e(no)}')">Edit</button><button class="b s" onclick="delB('${e(no)}')">Delete</button></div><button class="b s" onclick="dlg.close()">Close</button>`;
  $('#dlg').showModal()}
-function editB(no){eno=no;bd='';cart=D.InvoiceItems.filter(x=>x.no==no).map(o=>{const p=o.prod?D.Products.find(x=>x.id==o.prod):D.Products.find(x=>x.name==o.name&&x.part==o.part);return{id:p?p.id:'',r:p?p._r:0,name:o.name,part:o.part,hsn:o.hsn,qty:+o.qty,rate:+o.rate,gst:+o.gst,maxd:p?+p.maxdisc||0:0,brand:p?p.brand:o.brand||'',ask:o.ask||'',dt:+o.disc?String(o.disc):''}});eo=cart.map(c=>({r:c.r,qty:c.qty}));go('bill')}
+function editB(no){const iv=D.Invoices.find(x=>x.no==no);eno=no;bd='';btype=itype(iv);bincl=iv.incl=='1';cart=D.InvoiceItems.filter(x=>x.no==no).map(o=>{const p=o.prod?D.Products.find(x=>x.id==o.prod):D.Products.find(x=>x.name==o.name&&x.part==o.part);return{id:p?p.id:'',r:p?p._r:0,name:o.name,part:o.part,hsn:o.hsn,qty:+o.qty,rate:+o.rate,gst:+o.gst,maxd:p?+p.maxdisc||0:0,brand:p?p.brand:o.brand||'',ask:o.ask||'',dt:+o.disc?String(o.disc):''}});eo=cart.map(c=>({r:c.r,qty:c.qty}));go('bill')}
 function delB(no){if(!confirm('Delete '+no+'? Stock will be added back.'))return;busy(async()=>{await load();const i=D.Invoices.find(x=>x.no==no),L=D.InvoiceItems.filter(x=>x.no==no);
  await stk(L.map(o=>{const p=pf(o);return{r:p?p._r:0,qty:o.qty}}),[]);
- await api(SH+sid+'/values:batchClear',{method:'POST',body:JSON.stringify({ranges:[`Invoices!A${i._r}:I${i._r}`,...L.map(x=>`InvoiceItems!A${x._r}:L${x._r}`)]})});
+ await api(SH+sid+'/values:batchClear',{method:'POST',body:JSON.stringify({ranges:[`Invoices!A${i._r}:K${i._r}`,...L.map(x=>`InvoiceItems!A${x._r}:L${x._r}`)]})});
  $('#dlg').close();await load();go('home')})}
+const itype=i=>i.type||(D.InvoiceItems.some(x=>x.no==i.no&&+x.gst>0)?'G':'N'),taxRows=i=>[...(+i.disc?[['Discount given',i.disc]]:[]),...(itype(i)=='G'?[['Taxable value',i.sub],['CGST',i.cgst],['SGST',i.sgst]]:[['Sub total',i.sub]])];
 /* PDF */
 function mk(no){const i=D.Invoices.find(x=>x.no==no),L=D.InvoiceItems.filter(x=>x.no==no),d=new jspdf.jsPDF({unit:'mm',format:'a4'});let y=18;
  if(S.logo)try{d.addImage(S.logo,'JPEG',14,10,22,22)}catch(x){}
  d.setFont('helvetica','bold').setFontSize(16).text(S.shop||'Shop',40,16);
  d.setFont('helvetica','normal').setFontSize(9).text([...d.splitTextToSize(S.addr||'',100),'Ph: '+(S.phone||''),S.gstin?'GSTIN: '+S.gstin:''],40,21);
- d.setFont('helvetica','bold').setFontSize(12).text('TAX INVOICE',196,16,{align:'right'});
+ d.setFont('helvetica','bold').setFontSize(12).text((itype(i)=='G'?'TAX INVOICE':'BILL OF SUPPLY'),196,16,{align:'right'});
  d.setFont('helvetica','normal').setFontSize(10).text(['No: '+i.no,'Date: '+i.date],196,22,{align:'right'});
  d.text('Bill to: '+i.cust+(i.phone?'  ('+i.phone+')':''),14,42);d.line(14,46,196,46);y=52;
- const hd=()=>{d.setFont('helvetica','bold').setFontSize(9);d.text('Item',14,y);d.text('HSN',92,y);d.text('Qty',110,y);d.text('Rate',122,y);d.text('Disc',140,y);d.text('GST%',158,y);d.text('Amount',196,y,{align:'right'});d.line(14,y+2,196,y+2);y+=8;d.setFont('helvetica','normal')};
+ const hd=()=>{d.setFont('helvetica','bold').setFontSize(9);d.text('Item',14,y);d.text('HSN',92,y);d.text('Qty',110,y);d.text(i.incl=='1'?'MRP':'Rate',122,y);d.text('Disc',140,y);d.text('GST%',158,y);d.text('Amount',196,y,{align:'right'});d.line(14,y+2,196,y+2);y+=8;d.setFont('helvetica','normal')};
  hd();L.forEach(x=>{if(y>245){d.addPage();y=20;hd()}d.text(String(x.name).slice(0,38),14,y);d.text(String(x.hsn),92,y);d.text(String(x.qty),110,y);d.text(String(x.rate),122,y);d.text(+x.disc?String(x.disc):'-',140,y);d.text(String(x.gst),158,y);d.text((+x.amount).toFixed(2),196,y,{align:'right'});y+=7});
- d.line(14,y,196,y);y+=7;[...(+i.disc?[['Discount given',i.disc]]:[]),['Taxable value',i.sub],['CGST',i.cgst],['SGST',i.sgst]].forEach(a=>{d.text(a[0],150,y);d.text((+a[1]).toFixed(2),196,y,{align:'right'});y+=6});
+ d.line(14,y,196,y);y+=7;taxRows(i).forEach(a=>{d.text(a[0],150,y);d.text((+a[1]).toFixed(2),196,y,{align:'right'});y+=6});
  d.setFont('helvetica','bold').setFontSize(12).text('Total  Rs. '+i.total,196,y+3,{align:'right'});
  d.setFont('helvetica','normal').setFontSize(8).text(d.splitTextToSize('Terms: '+(S.terms||''),110),14,268);
  if(S.sign)try{d.addImage(S.sign,'JPEG',156,262,36,16)}catch(x){}
@@ -174,11 +182,11 @@ async function mkImg(no){const i=D.Invoices.find(v=>v.no==no),L=D.InvoiceItems.f
  x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.fillStyle='#000';
  const lg=await ld(S.logo),sg=await ld(S.sign);if(lg)x.drawImage(lg,14*k,10*k,22*k,22*k);
  T(S.shop||'Shop',40,16,16,1);let y=21;W(S.addr||'',100,9).forEach(l=>{T(l,40,y,9);y+=4});T('Ph: '+(S.phone||''),40,y,9);if(S.gstin)T('GSTIN: '+S.gstin,40,y+4,9);
- T('TAX INVOICE',196,16,12,1,'right');T('No: '+i.no,196,22,10,0,'right');T('Date: '+i.date,196,27,10,0,'right');
+ T((itype(i)=='G'?'TAX INVOICE':'BILL OF SUPPLY'),196,16,12,1,'right');T('No: '+i.no,196,22,10,0,'right');T('Date: '+i.date,196,27,10,0,'right');
  T('Bill to: '+i.cust+(i.phone?'  ('+i.phone+')':''),14,42,10);x.fillRect(14*k,46*k,182*k,.3*k);y=52;
- [['Item',14],['HSN',92],['Qty',110],['Rate',122],['Disc',140],['GST%',158]].forEach(a=>T(a[0],a[1],y,9,1));T('Amount',196,y,9,1,'right');x.fillRect(14*k,(y+2)*k,182*k,.3*k);y+=8;
+ [['Item',14],['HSN',92],['Qty',110],[i.incl=='1'?'MRP':'Rate',122],['Disc',140],['GST%',158]].forEach(a=>T(a[0],a[1],y,9,1));T('Amount',196,y,9,1,'right');x.fillRect(14*k,(y+2)*k,182*k,.3*k);y+=8;
  L.forEach(r=>{T(String(r.name).slice(0,38),14,y,9);T(r.hsn,92,y,9);T(r.qty,110,y,9);T(r.rate,122,y,9);T(+r.disc?r.disc:'-',140,y,9);T(r.gst,158,y,9);T((+r.amount).toFixed(2),196,y,9,0,'right');y+=7});
- x.fillRect(14*k,y*k,182*k,.3*k);y+=7;[...(+i.disc?[['Discount given',i.disc]]:[]),['Taxable value',i.sub],['CGST',i.cgst],['SGST',i.sgst]].forEach(a=>{T(a[0],150,y,10);T((+a[1]).toFixed(2),196,y,10,0,'right');y+=6});
+ x.fillRect(14*k,y*k,182*k,.3*k);y+=7;taxRows(i).forEach(a=>{T(a[0],150,y,10);T((+a[1]).toFixed(2),196,y,10,0,'right');y+=6});
  T('Total  Rs. '+i.total,196,y+3,12,1,'right');
  let ty=268;W('Terms: '+(S.terms||''),110,8).forEach(l=>{T(l,14,ty,8);ty+=3.6});
  if(sg)x.drawImage(sg,156*k,262*k,36*k,16*k);T('Authorised signatory',196,284,8,0,'right');return c}
@@ -196,15 +204,18 @@ async function drv(blob,name,pub,t=1){const mt=blob.type||'application/octet-str
  if(!r.ok)throw new Error((await r.text()).slice(0,200));const f=await r.json();
  if(pub)await api('https://www.googleapis.com/drive/v3/files/'+f.id+'/permissions',{method:'POST',body:JSON.stringify({role:'reader',type:'anyone'})});return f}
 let pbt='';
-function buy(){return `<h1>Purchase entry</h1><div class="c"><label>Supplier</label><input id="su" list="sl4"><datalist id="sl4">${sup().map(s=>`<option value="${e(s)}">`).join('')}</datalist><label>Supplier bill number</label><input id="sb"><label>Date</label><input id="sd" type="date" value="${ymd(new Date())}">
+function buy(){return `<h1>Purchase entry</h1><div class="c"><label>Supplier</label><input id="su" list="sl4" oninput="si();dw()"><div id="sinfo" class="m"></div><datalist id="sl4">${sup().map(s=>`<option value="${e(s)}">`).join('')}</datalist><label>Supplier bill number</label><input id="sb" oninput="dw()"><div id="dupw" class="dn"></div><label>Date</label><input id="sd" type="date" value="${ymd(new Date())}">
  <label>Add item (part number, brand or any name)</label><input id="pq" oninput="rb()"><div id="pres"></div></div><div id="pct"></div>
  <h2>Recent purchases</h2><div class="c">${D.Purchases.slice(-10).reverse().map(x=>`<div class="it r" onclick="openP('${x.id}')"><div>${e(x.supplier)} · ${e(x.bill)}<div class="m">${e(x.date)} · ${R(x.total)}${x.file?' · bill saved':''}</div></div><span class="m">Open</span></div>`).join('')||'<div class="m">No purchases yet.</div>'}</div>`}
+function si(){const s=D.Suppliers.find(x=>nz(x.name)==nz($('#su').value));$('#sinfo').textContent=s?[s.gstin&&'GSTIN '+s.gstin,s.phone,s.address].filter(Boolean).join(' · '):''}
+function dw(){const s=$('#su').value,b=$('#sb').value.trim(),x=b?D.Purchases.find(v=>nz(v.supplier)==nz(s)&&nz(v.bill)==nz(b)):null;$('#dupw').textContent=x?'This bill is already saved ('+x.date+', '+R(x.total)+'). Saving will add these items to that same bill.':''}
 function rb(){const q=$('#pq');if(q){const v=q.value,l=v?fp(v).slice(0,6):[];
   $('#pres').innerHTML=l.map(p=>`<div class="it r" onclick="addPC('${p.id}')">${ph(p)}<div style="flex:1">${e(p.name)}<div class="m">${e(p.brand)} ${e(p.part)}</div></div><div class="m">Stock ${e(p.stock)}<br>Cost ${R(p.cost)}</div></div>`).join('')+(v?`<button class="b s" style="margin-top:8px" onclick="newItem($('#pq').value)">Not listed? Add new item "${e(v)}"</button>`:'')}
  const t=ptot(),rd=pbt!==''?+pbt-(t.sub+t.gst):0;
- $('#pct').innerHTML=pc2.length?`<div class="c">${pc2.map((c,i)=>`<div class="it"><div class="r"><b>${e(c.name)}</b><button class="b s" onclick="pc2.splice(${i},1);rb()">✕</button></div>
+ $('#pct').innerHTML=pc2.length?`<div class="c">${pc2.map((c,i)=>{const cur=+((D.Products.find(x=>x.id==c.id)||{}).stock)||0;return `<div class="it"><div class="r"><b>${e(c.name)}</b><button class="b s" onclick="pc2.splice(${i},1);rb()">✕</button></div>
+ <div class="m">Stock now ${cur} → after this purchase ${cur+(+c.qty||0)}</div>
  <div class="g"><div><label>Qty received</label><input type="number" value="${c.qty}" onchange="pc2[${i}].qty=+this.value;pc2[${i}].amt=Math.round(pc2[${i}].cost*pc2[${i}].qty*100)/100;rb()"></div><div><label>GST %</label><input type="number" value="${c.gst}" onchange="pc2[${i}].gst=+this.value;rb()"></div></div>
- <div class="g"><div><label>Taxable amount (from bill)</label><input type="number" step="any" value="${c.amt}" onchange="pc2[${i}].amt=+this.value;pc2[${i}].cost=pc2[${i}].qty?pc2[${i}].amt/pc2[${i}].qty:0;rb()"></div><div><label>Cost per piece</label><input type="number" step="any" value="${+(+c.cost).toFixed(4)}" onchange="pc2[${i}].cost=+this.value;pc2[${i}].amt=Math.round(pc2[${i}].cost*pc2[${i}].qty*100)/100;rb()"></div></div></div>`).join('')}
+ <div class="g"><div><label>Taxable amount (from bill)</label><input type="number" step="any" value="${c.amt}" onchange="pc2[${i}].amt=+this.value;pc2[${i}].cost=pc2[${i}].qty?pc2[${i}].amt/pc2[${i}].qty:0;rb()"></div><div><label>Cost per piece</label><input type="number" step="any" value="${+(+c.cost).toFixed(4)}" onchange="pc2[${i}].cost=+this.value;pc2[${i}].amt=Math.round(pc2[${i}].cost*pc2[${i}].qty*100)/100;rb()"></div></div></div>`}).join('')}
  <div class="r it"><span>Taxable value</span><span>${R(t.sub)}</span></div><div class="r"><span>GST paid</span><span>${R(t.gst)}</span></div>
  <label>Bill total as printed by supplier (optional, sets the round off)</label><input id="bt" type="number" step="any" value="${e(pbt)}" oninput="rr()" placeholder="example 4800">
  <div class="r"><span>Round off</span><span id="ro">${R(rd)}</span></div><div class="r it"><b>Total</b><span class="big" id="gt">${R(pbt!==''?+pbt:t.sub+t.gst)}</span></div>
@@ -217,9 +228,13 @@ function newItem(txt){$('#dlg').innerHTML=`<h2>New item</h2><label>Name used in 
 function saveNI(){busy(async()=>{const n=$('#n_name').value.trim();if(!n)throw new Error('Enter the item name');let pf='';const f=$('#n_photo').files[0];if(f)pf=(await drv(await shrink(f,800,.75),'item-'+n+'.jpg',true)).id;
  const id='N'+Date.now();await add('Products',[[id,n,$('#n_part').value.trim(),'',$('#n_hsn').value.trim(),$('#n_price').value,0,$('#n_gst').value||0,0,$('#n_rack').value.trim(),$('#n_cup').value.trim(),$('#n_box').value.trim(),$('#n_brand').value.trim(),'','','',pf]]);
  await load();$('#dlg').close();addPC(id)})}
-function saveP2(){busy(async()=>{if(!pc2.length)throw new Error('Add items first');await load();const t=ptot(),id='P'+Date.now(),dt=$('#sd').value||ymd(new Date()),spl=$('#su').value||'Supplier',bn=$('#sb').value,tot=pbt!==''?+pbt:t.sub+t.gst,rd=tot-(t.sub+t.gst);
+function saveP2(){busy(async()=>{if(!pc2.length)throw new Error('Add items first');await load();const t=ptot(),dt=$('#sd').value||ymd(new Date()),spl=$('#su').value||'Supplier',bn=$('#sb').value.trim(),tot=pbt!==''?+pbt:t.sub+t.gst,rd=tot-(t.sub+t.gst);
+ const ex=bn?D.Purchases.find(v=>nz(v.supplier)==nz(spl)&&nz(v.bill)==nz(bn)):null;
+ if(ex&&!confirm('Bill '+bn+' from '+spl+' is already saved ('+ex.date+', '+R(ex.total)+').\n\nOK = add these items to that same bill.\nCancel = stop.'))return;
+ const id=ex?ex.id:'P'+Date.now();
  let link='';const f=$('#bf').files[0];if(f){const im=f.type.startsWith('image/'),bl=im?await shrink(f,1600,.8):f;link=(await drv(bl,`Bill-${spl}-${bn||'nobill'}-${dt}.${im?'jpg':(f.name.split('.').pop()||'pdf')}`,false)).webViewLink||''}
- await add('Purchases',[[id,dt,spl,bn,t.sub.toFixed(2),t.gst.toFixed(2),tot.toFixed(2),rd.toFixed(2),link]]);
+ if(ex)await api(SH+sid+`/values/Purchases!A${ex._r}:I${ex._r}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[[ex.id,ex.date,ex.supplier,ex.bill,(+ex.sub+t.sub).toFixed(2),(+ex.gst+t.gst).toFixed(2),(+ex.total+tot).toFixed(2),((+ex.round||0)+rd).toFixed(2),link||ex.file||'']]})});
+ else await add('Purchases',[[id,dt,spl,bn,t.sub.toFixed(2),t.gst.toFixed(2),tot.toFixed(2),rd.toFixed(2),link]]);
  await add('PurchaseItems',pc2.map(c=>[id,c.name,c.part,c.qty,+(+c.cost).toFixed(4),c.gst,(+c.amt).toFixed(2),c.id]));
  await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:pc2.flatMap(c=>{const q=D.Products.find(x=>x.id==c.id);if(!q)return[];return[{range:'Products!I'+q._r,values:[[(+q.stock||0)+ +c.qty]]},{range:'Products!G'+q._r,values:[[+(+c.cost).toFixed(4)]]}]})})});
  await recv(pc2,spl);pc2=[];pbt='';await load();go('buy')})}
@@ -249,7 +264,7 @@ const isv=(i,m)=>ng()?{sub:+i.sub,tax:+i.cgst+ +i.sgst,total:+i.total,n:1}:sp(i,
 const psv=(p,m)=>ng()?{sub:+p.sub,gst:+p.gst,total:+p.total,n:1}:pp(p,m,true);
 /* MORE */
 function more(){const d1=ymd(new Date()).slice(0,8)+'01',d2=ymd(new Date());
- return `<h1>More</h1>${[['want','Wanted and orders'],['enq','Enquiries'],['rep','Reports and graphs'],['exp','Expenses'],['set','Settings']].map(a=>`<div class="c r" onclick="go('${a[0]}')"><b>${a[1]}</b><span class="m">Open</span></div>`).join('')}
+ return `<h1>More</h1>${[['want','Wanted and orders'],['enq','Enquiries'],['sups','Suppliers'],['rep','Reports and graphs'],['exp','Expenses'],['set','Settings']].map(a=>`<div class="c r" onclick="go('${a[0]}')"><b>${a[1]}</b><span class="m">Open</span></div>`).join('')}
  <div class="c"><b>Export GST file for CA (Excel)</b><div class="m">GST bills, GST purchases, GST summary, expenses and GST item stock.</div><label>From</label><input id="ef" type="date" value="${d1}"><label>To</label><input id="et" type="date" value="${d2}"><button class="b" onclick="xl('g')">Download GST file</button></div>
  <div style="text-align:center;margin-top:36px;opacity:.12;font-size:22px;padding:14px" onclick="go('priv')">•</div>`}
 function priv(){const cur=ymd(new Date()).slice(0,7),M=months(4),cost={},inv={};D.Products.forEach(p=>cost[p.name+'|'+p.part]=+p.cost||0);D.Invoices.forEach(i=>inv[i.no]=i);
@@ -298,7 +313,7 @@ function xl(kind){const g=kind=='g',f=$('#ef').value,t=$('#et').value,inr=d=>d>=
  X('Sales',['Invoice','Date','Customer','Phone','Taxable','CGST','SGST','Total'],iv.map(x=>[x.i.no,x.i.date,x.i.cust,x.i.phone,x.sub,x.tax/2,x.tax/2,x.total]));
  X('Sale items',g?['Invoice','Item','Part no','HSN','Qty','Rate','GST %','Amount']:['Invoice','Item','Part no','Qty','Rate','Amount','Cost','Margin %'],
   sold.map(x=>g?[x.no,x.name,x.part,x.hsn,+x.qty,+x.rate,+x.gst,+x.amount]:[x.no,x.name,x.part,+x.qty,+x.rate,+x.amount,x.qty*(cost[x.name+'|'+x.part]||0),+x.amount?Math.round((x.amount-x.qty*(cost[x.name+'|'+x.part]||0))/x.amount*1000)/10:0]));
- X('Purchases',['Date','Supplier','Bill no','Taxable','GST','Total'],pu.map(x=>[x.q.date,x.q.supplier,x.q.bill,x.sub,x.gst,x.total]));
+ X('Purchases',['Date','Supplier','Supplier GSTIN','Bill no','Taxable','GST','Total'],pu.map(x=>[x.q.date,x.q.supplier,(D.Suppliers.find(s=>nz(s.name)==nz(x.q.supplier))||{}).gstin||'',x.q.bill,x.sub,x.gst,x.total]));
  X('Purchase items',['Supplier bill','Item','Part no','Qty','Cost','GST %','Amount'],D.PurchaseItems.filter(x=>pids.has(x.pid)&&((+x.gst>0)==g)).map(x=>{const q=D.Purchases.find(v=>v.id==x.pid);return[q?q.bill:'',x.name,x.part,+x.qty,+x.cost,+x.gst,+x.amount]}));
  if(g)X('Expenses',['Date','Type','Amount','Note'],ex.map(x=>[x.date,x.cat,+x.amount,x.note]));
  X('Stock',['Item','Part no','HSN','Stock','Cost','Stock value'],D.Products.filter(q=>(+q.gst>0)==g).map(q=>[q.name,q.part,q.hsn,+q.stock,+q.cost,(+q.stock||0)*(+q.cost||0)]));
@@ -324,7 +339,7 @@ function want(){const sd=sold90(),all=wantedRows(),set=ws?sb(ws):null,rows=set&&
  const bs=r=>{const p=D.Products.find(x=>pk(x.name,x.part)==r.k);if(!p||!p.group)return '';const al=D.Products.filter(x=>nz(x.group)==nz(p.group)).map(x=>({b:x.brand||x.name,q:(sd[pk(x.name,x.part)]||{q:0}).q,a:(sd[pk(x.name,x.part)]||{ask:0}).ask,s:x.stock})).sort((a,b)=>b.q-a.q);
   return al.length>1?`<div class="m">${al.map((x,i)=>`${i?'':'★ '}${e(x.b)}: sold ${x.q}${x.a?' (asked by name '+x.a+')':''}, stock ${e(x.s)}`).join(' · ')}</div>`:''};
  return `<h1>Wanted</h1><div class="c"><label>Show items for supplier</label><input id="wsup" list="sl" value="${e(ws)}" placeholder="All suppliers" onchange="ws=this.value.trim();go('want')"><datalist id="sl">${sup().map(s=>`<option value="${e(s)}">`).join('')}</datalist>
- ${ws&&!(set&&set.size)?'<div class="m">New supplier: showing everything. Ask which brands they supply.</div>':''}<button class="b s" onclick="supEdit()">Supplier brands</button></div>
+ ${ws&&!(set&&set.size)?'<div class="m">New supplier: showing everything. Ask which brands they supply.</div>':''}<button class="b s" onclick="supEdit(ws)">Supplier brands</button></div>
  <div class="c"><label>Add an item to Wanted</label><input id="wn" list="pl2"><datalist id="pl2">${D.Products.map(p=>`<option value="${e(p.name)}">`).join('')}</datalist><label>Quantity</label><input id="wq" type="number" value="1"><button class="b" onclick="addW()">Add</button></div>
  ${rows.map((r,i)=>`<div class="c"><div class="r"><b>${e(r.item)}</b><b>${r.left}</b></div><div class="m">${e(r.part)} · ${e(r.brand||'no brand')} · ${e(r.why.join(', '))}</div>${bs(r)}<div class="g" style="margin-top:8px"><button class="b" onclick="ordW(${i})">Order</button>${r.why.includes('Added by you')?`<button class="b s" onclick="rmW(${i})">Remove</button>`:'<span></span>'}</div></div>`).join('')||'<div class="c m">Nothing wanted right now.</div>'}
  <h2>Ordered</h2>${D.Orders.filter(o=>o.status=='ordered').map(o=>{const L=late(o);return `<div class="c" style="${L?'border-color:var(--bad)':''}"><div class="r"><b>${e(o.item)}</b><b class="${L?'dn':''}">${+o.qty-+o.got} pending</b></div><div class="m">${e(o.supplier)} · ordered ${e(o.date)} (${days(o.date)} days ago) · received ${e(o.got)} of ${e(o.qty)}</div>${L?`<div class="dn">Not received yet</div><div class="g"><button class="b s" onclick="ignO('${o.id}')">Ignore (next bill)</button><button class="b" onclick="reO('${o.id}')">Order from another supplier</button></div>`:`<button class="b s" onclick="reO('${o.id}')">Cancel order</button>`}</div>`}).join('')||'<div class="c m">No open orders.</div>'}`}
@@ -339,10 +354,12 @@ function saveO(i){busy(async()=>{const r=WR[i],s=$('#os').value.trim(),q=+$('#oq
 const putc=(r,v)=>api(SH+sid+`/values/${r}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[[v]]})});
 function ignO(id){busy(async()=>{const o=D.Orders.find(x=>x.id==id);await putc('Orders!J'+o._r,'1');await load();go('want')})}
 function reO(id){busy(async()=>{const o=D.Orders.find(x=>x.id==id),left=+o.qty-+o.got;await putc('Orders!I'+o._r,'cancelled');if(left>0)await add('Wanted',[['W'+Date.now(),ymd(new Date()),o.item,o.part,o.brand,left]]);await load();go('want')})}
-function supEdit(){$('#dlg').innerHTML=`<h2>Supplier brands</h2><label>Supplier</label><input id="sn" list="sl3" value="${e(ws)}" onchange="sbf()"><datalist id="sl3">${sup().map(s=>`<option value="${e(s)}">`).join('')}</datalist><label>Brands they supply (comma separated)</label><input id="sbr" placeholder="Hero, Honda"><div class="m">Brands are also learned from your purchase history.</div><div class="r"><button class="b s" onclick="dlg.close()">Cancel</button><button class="b" onclick="saveSup()">Save</button></div>`;$('#dlg').showModal();sbf()}
-function sbf(){const x=D.Suppliers.find(v=>nz(v.name)==nz($('#sn').value));$('#sbr').value=x?x.brands:''}
-function saveSup(){busy(async()=>{const n=$('#sn').value.trim();if(!n)throw new Error('Enter the supplier');const x=D.Suppliers.find(v=>nz(v.name)==nz(n)),b=$('#sbr').value;
- if(x)await putc('Suppliers!D'+x._r,b);else await add('Suppliers',[['S'+Date.now(),n,'',b]]);$('#dlg').close();await load();go('want')})}
+function supEdit(n){const x=D.Suppliers.find(v=>nz(v.name)==nz(n||''))||{name:n||''};
+ $('#dlg').innerHTML=`<h2>${x.id?'Edit supplier':'New supplier'}</h2><label>Name</label><input id="sn" value="${e(x.name)}"><label>Phone</label><input id="sp" type="tel" value="${e(x.phone)}"><label>GSTIN</label><input id="sg" value="${e(x.gstin)}"><label>Address</label><input id="sa" value="${e(x.address)}"><label>Brands they supply (comma separated)</label><input id="sbr" value="${e(x.brands)}" placeholder="Hero, Honda"><div class="m">Brands are also learned from your purchase history.</div><div class="r"><button class="b s" onclick="dlg.close()">Cancel</button><button class="b" onclick="saveSup()">Save</button></div>${x.id?`<button class="b s" style="width:100%;margin-top:10px;color:var(--bad)" onclick="delSup('${e(x.id)}')">Delete supplier</button>`:''}`;$('#dlg').showModal()}
+function saveSup(){busy(async()=>{const n=$('#sn').value.trim();if(!n)throw new Error('Enter the supplier name');const x=D.Suppliers.find(v=>nz(v.name)==nz(n)),row=[x?x.id:'S'+Date.now(),n,$('#sp').value.trim(),$('#sbr').value.trim(),$('#sg').value.trim(),$('#sa').value.trim()];
+ if(x)await api(SH+sid+`/values/Suppliers!A${x._r}:F${x._r}?valueInputOption=RAW`,{method:'PUT',body:JSON.stringify({values:[row]})});else await add('Suppliers',[row]);$('#dlg').close();await load();go(tab)})}
+function delSup(id){if(!confirm('Delete this supplier? Purchases already saved stay.'))return;busy(async()=>{const x=D.Suppliers.find(v=>v.id==id);await api(SH+sid+`/values/Suppliers!A${x._r}:F${x._r}:clear`,{method:'POST'});$('#dlg').close();await load();go(tab)})}
+function sups(){return `<div class="r"><h1>Suppliers</h1><button class="b" onclick="supEdit('')">Add supplier</button></div>${D.Suppliers.map(s=>`<div class="c" onclick="supEdit('${e(s.name)}')"><b>${e(s.name)}</b><div class="m">${e([s.gstin&&'GSTIN '+s.gstin,s.phone,s.brands].filter(Boolean).join(' · '))}</div></div>`).join('')||'<div class="c m">No suppliers yet.</div>'}`}
 async function recv(items,supn){const s=nz(supn),up=[],cl=[];
  items.forEach(c=>{let q=+c.qty;const k=pk(c.name,c.part);
   D.Orders.filter(o=>o.status=='ordered'&&nz(o.supplier)==s&&pk(o.item,o.part)==k).forEach(o=>{if(q<=0)return;const t=Math.min(+o.qty-+o.got,q);q-=t;const g=+o.got+t;up.push({range:'Orders!H'+o._r,values:[[g]]},{range:'Orders!I'+o._r,values:[[g>=+o.qty?'received':'ordered']]})});
@@ -355,7 +372,7 @@ function enq(){const pre=enqPre;enqPre='';const c={};D.Enquiries.filter(x=>days(
 function saveE(){busy(async()=>{const n=$('#en').value.trim();if(!n)throw new Error('Enter the item');const p=D.Products.find(x=>nz(x.name)==nz(n));
  await add('Enquiries',[['E'+Date.now(),ymd(new Date()),p?p.name:n,p?p.part:'',$('#eb').value||(p?p.brand:''),$('#ec').value,$('#ep').value,p?p.id:'']]);await load();go('enq')})}
 /* SETTINGS */
-const SF=[['shop','Shop name'],['addr','Address'],['phone','Phone'],['gstin','GSTIN'],['prefix','Invoice prefix (example INV-)'],['enqThr','Enquiries before an item goes to Wanted (default 3)'],['lateDays','Days before an order turns red (default 3)']];
+const SF=[['shop','Shop name'],['addr','Address'],['phone','Phone'],['gstin','GSTIN'],['prefix','GST bill prefix (example INV-)'],['prefixng','Non-GST bill prefix (example NG-)'],['next','Next GST bill number (change it to restart, example 1)'],['nextng','Next Non-GST bill number'],['nummode','Bill numbers by date? type date, or leave blank for 1, 2, 3'],['incl','Prices include GST? type yes, or leave blank'],['enqThr','Enquiries before an item goes to Wanted (default 3)'],['lateDays','Days before an order turns red (default 3)']];
 function set(){return `<h1>Settings</h1><div class="c">`+SF.map(([k,l])=>`<label>${l}</label><input id="s_${k}" value="${e(S[k])}">`).join('')+
  `<label>Terms and conditions</label><textarea id="s_terms" rows="4">${e(S.terms)}</textarea>
  <label>Logo</label>${S.logo?`<img class="p" src="${S.logo}">`:''}<input type="file" accept="image/*" onchange="up(this,'logo',240)">
