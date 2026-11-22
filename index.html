@@ -73,7 +73,7 @@ const add=(t,rows)=>api(SH+sid+'/values/'+t+'!A1:append?valueInputOption=RAW&ins
 const saveS=async()=>{await api(SH+sid+'/values/Settings!A1:B60:clear',{method:'POST'});
  await api(SH+sid+'/values/Settings!A1?valueInputOption=RAW',{method:'PUT',body:JSON.stringify({values:[['key','value'],...Object.entries(S)]})})};
 function go(t){tab=t;document.querySelectorAll('#nv button').forEach(b=>b.classList.toggle('on',b.id=='n_'+t));
- if(t!='bill'&&eno){eno='';eo=[];cart=[]}if(t!='buy')pc2=[];if(t!='nop')nsel={};$('#v').innerHTML={home,bill,items,buy,more,rep,exp,set,priv,want,enq,sups,nop}[t]();if(t=='bill')rc();if(t=='items')il();if(t=='buy')rb();if(t=='nop')nsRender();if(t=='rep')drawRep()}
+ if(t!='bill'&&eno){eno='';eo=[];cart=[]}if(t!='buy')pc2=[];if(t!='nop')nsel={};$('#v').innerHTML={home,bill,items,buy,more,rep,exp,set,priv,want,enq,sups,nop,pl}[t]();if(t=='bill')rc();if(t=='items')il();if(t=='buy')rb();if(t=='nop')nsRender();if(t=='rep')drawRep()}
 /* HOME */
 function home(){
  const now=new Date(),cur=ymd(now).slice(0,7),im=gi(),m={};let td=0;
@@ -264,7 +264,7 @@ const isv=(i,m)=>ng()?{sub:+i.sub,tax:+i.cgst+ +i.sgst,total:+i.total,n:1}:sp(i,
 const psv=(p,m)=>ng()?{sub:+p.sub,gst:+p.gst,total:+p.total,n:1}:pp(p,m,true);
 /* MORE */
 function more(){const d1=ymd(new Date()).slice(0,8)+'01',d2=ymd(new Date());
- return `<h1>More</h1>${[['nop','Stock without purchase'],['want','Wanted and orders'],['enq','Enquiries'],['sups','Suppliers'],['rep','Reports and graphs'],['exp','Expenses'],['set','Settings']].map(a=>`<div class="c r" onclick="go('${a[0]}')"><b>${a[1]}</b><span class="m">Open</span></div>`).join('')}
+ return `<h1>More</h1>${[['nop','Stock without purchase'],['pl','Price list for WhatsApp AI'],['want','Wanted and orders'],['enq','Enquiries'],['sups','Suppliers'],['rep','Reports and graphs'],['exp','Expenses'],['set','Settings']].map(a=>`<div class="c r" onclick="go('${a[0]}')"><b>${a[1]}</b><span class="m">Open</span></div>`).join('')}
  <div class="c"><b>Export GST file for CA (Excel)</b><div class="m">GST bills, GST purchases, GST summary, expenses and GST item stock.</div><label>From</label><input id="ef" type="date" value="${d1}"><label>To</label><input id="et" type="date" value="${d2}"><button class="b" onclick="xl('g')">Download GST file</button></div>
  <div style="text-align:center;margin-top:36px;opacity:.12;font-size:22px;padding:14px" onclick="go('priv')">•</div>`}
 function priv(){const cur=ymd(new Date()).slice(0,7),M=months(4),cost={},inv={};D.Products.forEach(p=>cost[p.name+'|'+p.part]=+p.cost||0);D.Invoices.forEach(i=>inv[i.no]=i);
@@ -411,6 +411,21 @@ function saveNop(){busy(async()=>{await load();const sp=$('#ns').value.trim();if
  const x=D.Suppliers.find(v=>nz(v.name)==nz(sp));if(!x)await add('Suppliers',[['S'+Date.now(),sp,'','','','',ty]]);else if((x.type||'')!=ty)await putc('Suppliers!G'+x._r,ty);
  await add('Purchases',[[id,dt,sp,bn,sub.toFixed(2),gst.toFixed(2),r2(sub+gst).toFixed(2),'0','','1']]);await add('PurchaseItems',rows);
  nsel={};await load();alert('Saved '+rows.length+' items under '+sp+'. Stock not changed.');go('nop')})}
+/* PRICE LIST (customer-safe: name, brand, part, MRP, availability only) */
+function pl(){return `<h1>Price list</h1><div class="c"><div class="m">Makes a separate Google Sheet named "Price list" in your Drive with only: item, brand, part number, MRP and In stock / Out of stock. No purchase price, no stock count, no supplier, no rack. Share only this sheet with your Meta AI Gmail.</div></div>
+ <div class="c"><button class="b" style="width:100%" onclick="updPL()">Update price list now</button><div class="m" style="margin-top:8px">${S.plid?'Last updated: '+e(S.pldate||'')+' · '+e(S.plcount||'')+' items':'Not created yet'}</div>${S.plid?`<a class="b s" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" href="https://docs.google.com/spreadsheets/d/${e(S.plid)}">Open price list sheet</a>`:''}</div>
+ <div class="c"><label>Share (view only) with this Gmail</label><input id="plm" type="email" value="${e(S.plmail||'')}" placeholder="shopai@gmail.com"><button class="b" onclick="sharePL()">Share price list</button><div class="m" style="margin-top:8px">Only the Price list sheet is shared. Your Billing App Data sheet is not shared. Update the list after big stock changes.</div></div>`}
+async function plRows(){return [['Item','Brand','Part number','MRP (Rs)','Availability'],...D.Products.filter(p=>+p.price>0).sort((a,b)=>String(a.name).localeCompare(String(b.name))).map(p=>[p.name,p.brand||'',p.part||'',+p.price,+p.stock>0?'In stock':'Out of stock'])]}
+function updPL(){busy(async()=>{await load();let id=S.plid,ti='Prices';
+ if(id){try{const m=await api('https://sheets.googleapis.com/v4/spreadsheets/'+id+'?fields=sheets.properties.title');ti=m.sheets[0].properties.title}catch(x){id=''}}
+ if(!id){const c=await api(SH,{method:'POST',body:JSON.stringify({properties:{title:'Price list'},sheets:[{properties:{title:ti}}]})});id=c.spreadsheetId;S.plid=id}
+ const rows=await plRows();
+ await api(SH+id+'/values/'+encodeURIComponent(ti)+'!A1:E5000:clear',{method:'POST'});
+ await api(SH+id+'/values/'+encodeURIComponent(ti)+'!A1?valueInputOption=RAW',{method:'PUT',body:JSON.stringify({values:rows})});
+ S.pldate=new Date().toLocaleString('en-IN');S.plcount=String(rows.length-1);await saveS();alert('Price list updated: '+(rows.length-1)+' items');go('pl')})}
+function sharePL(){busy(async()=>{const m=$('#plm').value.trim();if(!/^\S+@\S+\.\S+$/.test(m))throw new Error('Enter a valid Gmail address');if(!S.plid)throw new Error('Tap "Update price list now" first');
+ await api('https://www.googleapis.com/drive/v3/files/'+S.plid+'/permissions?sendNotificationEmail=false',{method:'POST',body:JSON.stringify({role:'reader',type:'user',emailAddress:m})});
+ S.plmail=m;await saveS();alert('Shared with '+m+' (view only)');go('pl')})}
 /* SETTINGS */
 const SF=[['shop','Shop name'],['addr','Address'],['phone','Phone'],['gstin','GSTIN'],['prefix','GST bill prefix (example INV-)'],['prefixng','Non-GST bill prefix (example NG-)'],['next','Next GST bill number (change it to restart, example 1)'],['nextng','Next Non-GST bill number'],['nummode','Bill numbers by date? type date, or leave blank for 1, 2, 3'],['incl','Prices include GST? type yes, or leave blank'],['enqThr','Enquiries before an item goes to Wanted (default 3)'],['lateDays','Days before an order turns red (default 3)']];
 function set(){return `<h1>Settings</h1><div class="c">`+SF.map(([k,l])=>`<label>${l}</label><input id="s_${k}" value="${e(S[k])}">`).join('')+
