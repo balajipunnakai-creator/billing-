@@ -88,7 +88,7 @@ function home(){
  <div class="g"><button class="b s" onclick="go('rep')">Reports</button><button class="b s" onclick="go('exp')">Expenses</button></div><h2>Recent bills</h2>
  <div class="c">${D.Invoices.filter(i=>isv(i,im).n>0).slice(-20).reverse().map(i=>`<div class="it r" onclick="openB('${e(i.no)}')"><div>${e(i.no)} · ${e(i.cust)}<div class="m">${e(i.date)} · ${R(isv(i,im).total)}</div></div><span class="m">Open</span></div>`).join('')||'<div class="m">No bills yet. Tap New bill.</div>'}</div>`}
 /* ITEMS */
-function items(){return `<div class="r"><h1>Items</h1><button class="b" onclick="editP()">Add item</button></div>
+function items(){return `<div class="r"><h1>Items</h1><div style="display:flex;gap:8px"><button class="b s" onclick="impOpen()">Import</button><button class="b" onclick="editP()">Add item</button></div></div>
  <input id="iq" placeholder="Search by part number or any name" value="${e(iq)}" oninput="iq=this.value;il()"><div id="il"></div>`}
 const fp=q=>{const tk=String(q).toLowerCase().split(/\s+/).map(nz).filter(Boolean);return tk.length?D.Products.filter(p=>{const h=nz([p.name,p.part,p.brand,p.group,p.alt].join(' '));return tk.every(x=>h.includes(x))}):D.Products};
 const loc=p=>[p.rack&&'Rack '+p.rack,p.cupboard&&'Cupboard '+p.cupboard,p.box&&'Box '+p.box].filter(Boolean).join(' · ');
@@ -426,6 +426,42 @@ function updPL(){busy(async()=>{await load();let id=S.plid,ti='Prices';
 function sharePL(){busy(async()=>{const m=$('#plm').value.trim();if(!/^\S+@\S+\.\S+$/.test(m))throw new Error('Enter a valid Gmail address');if(!S.plid)throw new Error('Tap "Update price list now" first');if(!confirm('Share the Price list (view only) with:\n\n'+m+'\n\nIs this address correct?'))return;
  await api('https://www.googleapis.com/drive/v3/files/'+S.plid+'/permissions?sendNotificationEmail=false',{method:'POST',body:JSON.stringify({role:'reader',type:'user',emailAddress:m})});
  S.plmail=m;await saveS();alert('Shared with '+m+' (view only)');go('pl')})}
+/* IMPORT ITEMS FROM EXCEL / CSV */
+const FL=[['name','Name'],['part','Part number'],['alt','Other names'],['hsn','HSN'],['price','Selling price (MRP)'],['cost','Purchase price'],['gst','GST %'],['stock','Stock'],['rack','Rack'],['cupboard','Cupboard'],['box','Box'],['brand','Brand'],['group','Same-part group'],['maxdisc','Max discount %'],['minstock','Minimum stock']];
+const FA={name:['name','description','desc','itemname','item','product','productname','particulars','itemdescription','partname'],part:['part','partno','partnumber','partcode','code','itemcode'],alt:['alt','othernames','alias','marketname'],hsn:['hsn','hsncode','hsnsac'],price:['price','mrp','sellingprice','saleprice','rate','sp'],cost:['cost','purchaseprice','buyingprice','purchaserate','pp','costprice'],gst:['gst','gstpercent','tax','taxrate'],stock:['stock','qty','quantity','openingstock','closingstock'],rack:['rack'],cupboard:['cupboard','cabinet'],box:['box','bin'],brand:['brand','make','company'],group:['group','samepartgroup'],maxdisc:['maxdisc','maxdiscount'],minstock:['minstock','minimumstock','reorderlevel']};
+let IMP={rows:[],map:[]};
+const autoKey=h=>{const n=nz(h);for(const k in FA)if(FA[k].includes(n))return k;return ''};
+function parseTable(t){t=String(t).replace(/^﻿/,'');const d=(t.split('\n')[0]||'').includes('\t')?'\t':',',R=[];let row=[],c='',q=false;
+ for(let i=0;i<t.length;i++){const ch=t[i];
+  if(q){if(ch=='"'){if(t[i+1]=='"'){c+='"';i++}else q=false}else c+=ch}
+  else if(ch=='"')q=true;
+  else if(ch==d){row.push(c);c=''}
+  else if(ch=='\n'||ch=='\r'){if(ch=='\r'&&t[i+1]=='\n')i++;row.push(c);R.push(row);row=[];c=''}
+  else c+=ch}
+ if(c!==''||row.length){row.push(c);R.push(row)}return R.filter(r=>r.some(x=>String(x).trim()))}
+const loadX=()=>new Promise((ok,no)=>{if(window.XLSX)return ok();const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=ok;s.onerror=()=>no(new Error('Could not load the Excel reader. Please save the file as CSV and try again.'));document.head.appendChild(s)});
+function impOpen(){IMP={rows:[],map:[]};$('#dlg').innerHTML=`<h2>Import items</h2><div class="m">Excel (.xlsx) or CSV file. The first row must have column names such as name, part, price, gst, stock.</div><label>Choose file</label><input id="if" type="file" accept=".csv,.txt,.xlsx,.xls" onchange="impFile(this)"><label>Or paste rows copied from Excel or Google Sheets (with the first row of column names)</label><textarea id="ip" rows="5"></textarea><div class="r"><button class="b s" onclick="dlg.close()">Cancel</button><button class="b" onclick="impPaste()">Read pasted rows</button></div>`;$('#dlg').showModal()}
+async function impFile(el){const f=el.files[0];if(!f)return;try{let rows;
+ if(/\.(xlsx|xls)$/i.test(f.name)){await loadX();const wb=XLSX.read(await f.arrayBuffer());rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:false,defval:''})}
+ else rows=parseTable(await f.text());impLoad(rows)}catch(x){alert(x.message)}}
+function impPaste(){impLoad(parseTable($('#ip').value))}
+function impLoad(rows){rows=rows.filter(r=>r.some(x=>String(x??'').trim()));if(rows.length<2)return alert('No rows found. The first row must be column names, then the items.');
+ IMP.rows=rows;IMP.map=rows[0].map(autoKey);impMap()}
+function impMap(){const h=IMP.rows[0];$('#dlg').innerHTML=`<h2>Match the columns</h2><div class="m">${IMP.rows.length-1} rows found. Check what each column is. Choose "Ignore" for columns you do not need.</div>`+h.map((x,i)=>`<div class="it r"><span style="flex:1;min-width:0">${e(x||'(blank)')}<div class="m">${e(String((IMP.rows[1]||[])[i]??'').slice(0,30))}</div></span><select id="im${i}" style="width:52%" onchange="impPrev()"><option value="">Ignore</option>${FL.map(([k,l])=>`<option value="${k}" ${IMP.map[i]==k?'selected':''}>${l}</option>`).join('')}</select></div>`).join('')+`<label style="margin-top:10px;display:block">If the part number is already in the app</label><select id="ia" onchange="impPrev()"><option value="skip">Skip it (keep what is in the app)</option><option value="update">Update it with the filled columns</option></select><div class="c" id="ipv" style="margin-top:10px"></div><div class="r"><button class="b s" onclick="dlg.close()">Cancel</button><button class="b" onclick="impRun()">Import now</button></div>`;impPrev()}
+function impPlan(){const m=IMP.map,get=(r,k)=>{const i=m.indexOf(k);return i<0?'':String(r[i]??'').trim()},seen=new Set(),o={nw:[],up:[],ex:0,nn:0,df:0},act=($('#ia')||{}).value;
+ IMP.rows.slice(1).forEach(r=>{const v={};FL.forEach(([k])=>v[k]=get(r,k));if(!v.name){o.nn++;return}
+  const key=v.part?'p'+nz(v.part):'n'+nz(v.name);if(seen.has(key)){o.df++;return}seen.add(key);
+  const ex=v.part?D.Products.find(p=>nz(p.part)==nz(v.part)):D.Products.find(p=>nz(p.name)==nz(v.name));
+  if(ex){o.ex++;if(act=='update')o.up.push({ex,v})}else o.nw.push(v)});return o}
+function impPrev(){IMP.map=IMP.rows[0].map((x,i)=>($('#im'+i)||{}).value||'');const o=impPlan(),has=k=>IMP.map.includes(k);
+ $('#ipv').innerHTML=!has('name')?'<div class="dn">Choose which column is the item Name.</div>':`<div><b>${o.nw.length}</b> new items will be added</div><div class="m">Already in the app: ${o.ex} (${($('#ia')||{}).value=='update'?'will be updated':'skipped'}) · Repeated in this file: ${o.df} · No name, skipped: ${o.nn}</div>${o.nw.slice(0,3).map(v=>`<div class="m">e.g. ${e(v.name)} ${e(v.part)}</div>`).join('')}${!has('price')?'<div class="dn">No price column. New items get price 0 until you fill it.</div>':''}${has('stock')?'<div class="m">The Stock column becomes the stock in the app. Those items will appear in "Stock without purchase" so you can record their supplier.</div>':'<div class="m">No stock column. New items start with stock 0.</div>'}`}
+const nm=s=>{const n=parseFloat(String(s).replace(/[^0-9.\-]/g,''));return isNaN(n)?'':n};
+function impRun(){busy(async()=>{if(!IMP.map.includes('name'))throw new Error('Choose which column is the item Name');await load();const o=impPlan();if(!o.nw.length&&!o.up.length)throw new Error('Nothing to import');
+ const t0=Date.now(),rows=o.nw.map((v,i)=>[String(t0+i),v.name,v.part,v.alt,v.hsn,nm(v.price),nm(v.cost)||0,nm(v.gst)||0,nm(v.stock)||0,v.rack,v.cupboard,v.box,v.brand,v.group,nm(v.maxdisc),nm(v.minstock),'']);
+ for(let i=0;i<rows.length;i+=300)await add('Products',rows.slice(i,i+300));
+ const ud=o.up.map(({ex,v})=>{const g=k=>v[k]!==''?v[k]:ex[k],n=k=>v[k]!==''?nm(v[k]):ex[k];return{range:`Products!A${ex._r}:Q${ex._r}`,values:[[ex.id,g('name'),g('part'),g('alt'),g('hsn'),n('price'),n('cost'),n('gst'),n('stock'),g('rack'),g('cupboard'),g('box'),g('brand'),g('group'),n('maxdisc'),n('minstock'),ex.photo||'']]}});
+ for(let i=0;i<ud.length;i+=200)await api(SH+sid+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:ud.slice(i,i+200)})});
+ await load();$('#dlg').close();alert('Imported: '+rows.length+' new, '+ud.length+' updated');go('items')})}
 /* SETTINGS */
 const SF=[['shop','Shop name'],['addr','Address'],['phone','Phone'],['gstin','GSTIN'],['prefix','GST bill prefix (example INV-)'],['prefixng','Non-GST bill prefix (example NG-)'],['next','Next GST bill number (change it to restart, example 1)'],['nextng','Next Non-GST bill number'],['nummode','Bill numbers by date? type date, or leave blank for 1, 2, 3'],['incl','Prices include GST? type yes, or leave blank'],['enqThr','Enquiries before an item goes to Wanted (default 3)'],['lateDays','Days before an order turns red (default 3)']];
 function set(){return `<h1>Settings</h1><div class="c">`+SF.map(([k,l])=>`<label>${l}</label><input id="s_${k}" value="${e(S[k])}">`).join('')+
